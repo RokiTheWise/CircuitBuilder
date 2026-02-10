@@ -6,6 +6,7 @@ import {
   FiDownload,
   FiCoffee,
   FiGrid,
+  FiInfo,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import { Dispatch, SetStateAction, useState } from "react";
@@ -202,6 +203,12 @@ const StaggeredDropDown = ({
                 "_blank",
               )
             }
+          />
+          <Option
+            setOpen={setOpen}
+            Icon={FiInfo}
+            text="How It Works"
+            onClick={() => (window.location.href = "/how-it-works")}
           />
         </motion.ul>
       </motion.div>
