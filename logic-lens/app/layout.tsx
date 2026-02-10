@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LogiSketch - Truth Table to Circuit Generator",
+  title: "LogiSketch | Logic Circuit Generator",
   description:
-    "A tool to generate logic circuits from truth tables, and simplify boolean equations. Built with React and Next.js.",
+    "Visualize and simplify boolean logic instantly. Convert truth tables to logic circuits with Standard, NAND, and NOR modes.",
 };
 
 export default function RootLayout({
