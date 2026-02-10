@@ -24,8 +24,6 @@ export default function LogicLens() {
   const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
   const [equation, setEquation] = useState<string>("");
   const [isTyping, setIsTyping] = useState(false);
-
-  // NEW: Error state for invalid equations
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -44,20 +42,17 @@ export default function LogicLens() {
     if (!isTyping) {
       const eq = getSimplifiedEquation(numInputs, tableOutputs);
       setEquation(eq);
-      setErrorMsg(null); // Clear errors on auto-update
+      setErrorMsg(null);
     }
   }, [numInputs, tableOutputs, gateMode, isTyping]);
 
-  // 2. INPUT HANDLER (With Auto-Expand & Validation)
+  // 2. INPUT HANDLER
   const handleEquationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setEquation(val);
     setIsTyping(true);
-    setErrorMsg(null); // Reset error while typing
+    setErrorMsg(null);
 
-    // A. VALIDATION CHECK
-    // Allow: A-E, 0, 1, +, ', (), spaces. Reject everything else.
-    // UPDATED REGEX: Added 0-1
     const invalidChars = val
       .toUpperCase()
       .match(/[^A-E0-1\+\'\(\)\s\u2018\u2019`]/g);
@@ -67,7 +62,6 @@ export default function LogicLens() {
       );
     }
 
-    // B. AUTO-EXPAND INPUTS
     const uniqueVars = new Set(val.toUpperCase().match(/[A-E]/g));
     let requiredInputs = numInputs;
 
@@ -82,21 +76,18 @@ export default function LogicLens() {
       setNumInputs(requiredInputs);
     }
 
-    // C. PARSE & UPDATE TABLE
     const newTable = parseEquationToTable(val, requiredInputs);
     if (newTable) {
       setTableOutputs(newTable);
     } else if (val.trim() !== "") {
-      // If parser failed but box isn't empty, show syntax error
       if (!invalidChars)
         setErrorMsg("Invalid syntax. Check parentheses or operators.");
     }
   };
 
-  // 3. BLUR HANDLER
   const handleBlur = () => {
     setIsTyping(false);
-    setErrorMsg(null); // Clear transient errors
+    setErrorMsg(null);
     const eq = getSimplifiedEquation(numInputs, tableOutputs);
     setEquation(eq);
   };
@@ -108,7 +99,7 @@ export default function LogicLens() {
         <div className="flex items-center gap-4 mb-2">
           <div className="relative w-12 h-12 shrink-0 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
             <Image
-              src="/LogiSketch.png" // Make sure file extension matches
+              src="/LogiSketch.png"
               alt="LogiSketch Logo"
               fill
               className="object-cover"
@@ -124,34 +115,42 @@ export default function LogicLens() {
           </div>
         </div>
 
-        {/* MODE SELECTOR */}
+        {/* MODE SELECTOR WITH OUTLINE BUTTONS */}
         <div className="bg-slate-100 p-4 rounded-lg border border-slate-200">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
             Implementation Mode
           </label>
           <div className="flex gap-2">
-            <button
+            <DrawOutlineButton
+              isActive={gateMode === "STANDARD"}
               onClick={() => setGateMode("STANDARD")}
-              className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${gateMode === "STANDARD" ? "bg-white border-blue-500 text-blue-600 shadow-sm" : "border-transparent text-slate-500 hover:bg-slate-200"}`}
+              lineColor="bg-blue-500"
+              textColor="text-blue-600"
             >
               Standard
-            </button>
-            <button
+            </DrawOutlineButton>
+
+            <DrawOutlineButton
+              isActive={gateMode === "NAND"}
               onClick={() => setGateMode("NAND")}
-              className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${gateMode === "NAND" ? "bg-white border-purple-500 text-purple-600 shadow-sm" : "border-transparent text-slate-500 hover:bg-slate-200"}`}
+              lineColor="bg-purple-500"
+              textColor="text-purple-600"
             >
               NAND
-            </button>
-            <button
+            </DrawOutlineButton>
+
+            <DrawOutlineButton
+              isActive={gateMode === "NOR"}
               onClick={() => setGateMode("NOR")}
-              className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${gateMode === "NOR" ? "bg-white border-orange-500 text-orange-600 shadow-sm" : "border-transparent text-slate-500 hover:bg-slate-200"}`}
+              lineColor="bg-orange-500"
+              textColor="text-orange-600"
             >
               NOR
-            </button>
+            </DrawOutlineButton>
           </div>
         </div>
 
-        {/* INPUTS CONTROL (With Disabled States) */}
+        {/* INPUTS CONTROL */}
         <div className="flex items-center justify-between bg-slate-100 p-3 rounded-lg border border-slate-200">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold text-slate-600">
@@ -193,7 +192,7 @@ export default function LogicLens() {
           </div>
         </div>
 
-        {/* EQUATION INPUT (With Error Styling) */}
+        {/* EQUATION INPUT */}
         <div
           className={`border rounded-lg p-4 transition-all focus-within:ring-2 
             ${
@@ -267,3 +266,50 @@ export default function LogicLens() {
     </div>
   );
 }
+
+// --- CUSTOM OUTLINE BUTTON COMPONENT ---
+interface DrawOutlineButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children: React.ReactNode;
+  isActive: boolean;
+  lineColor: string; // e.g. "bg-blue-500"
+  textColor: string; // e.g. "text-blue-600"
+}
+
+const DrawOutlineButton = ({
+  children,
+  isActive,
+  lineColor,
+  textColor,
+  ...rest
+}: DrawOutlineButtonProps) => {
+  return (
+    <button
+      {...rest}
+      className={`group relative flex-1 px-4 py-2 text-xs font-bold transition-colors duration-[400ms]
+        ${isActive ? `bg-white ${textColor} shadow-sm` : "text-slate-500 hover:text-slate-700 bg-transparent"}
+      `}
+    >
+      <span className="relative z-10">{children}</span>
+
+      {/* TOP */}
+      <span
+        className={`absolute left-0 top-0 h-[2px] ${lineColor} transition-all duration-100 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`}
+      />
+
+      {/* RIGHT */}
+      <span
+        className={`absolute right-0 top-0 w-[2px] ${lineColor} transition-all delay-100 duration-100 ${isActive ? "h-full" : "h-0 group-hover:h-full"}`}
+      />
+
+      {/* BOTTOM */}
+      <span
+        className={`absolute bottom-0 right-0 h-[2px] ${lineColor} transition-all delay-200 duration-100 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`}
+      />
+
+      {/* LEFT */}
+      <span
+        className={`absolute bottom-0 left-0 w-[2px] ${lineColor} transition-all delay-300 duration-100 ${isActive ? "h-full" : "h-0 group-hover:h-full"}`}
+      />
+    </button>
+  );
+};
