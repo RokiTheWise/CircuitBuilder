@@ -5,7 +5,7 @@ const getLabel = (i: number) => String.fromCharCode(65 + i);
 export const generateCircuit = (
   numInputs: number, 
   outputs: Record<number, number>,
-  mode: 'STANDARD' | 'NAND' = 'STANDARD'
+  mode: 'STANDARD' | 'NAND' | 'NOR' = 'STANDARD'
 ): { nodes: Node[], edges: Edge[] } => {
   
   const nodes: Node[] = [];
@@ -13,7 +13,7 @@ export const generateCircuit = (
   let nodeId = 1;
   const getId = () => `${nodeId++}`;
 
-  // 1. SETUP INPUTS (We do this FIRST so they exist even if no rows are active)
+  // 1. SETUP INPUTS
   const inputIds: string[] = [];
   for (let i = 0; i < numInputs; i++) {
     const id = getId();
@@ -28,15 +28,12 @@ export const generateCircuit = (
   }
 
   // 2. FILTER & SORT ACTIVE ROWS
-  //  strictly filter rows that are valid for the current numInputs to prevent "Ghost Rows"
   const maxRows = Math.pow(2, numInputs);
   const activeRows = Object.keys(outputs)
     .map(Number)
     .filter(idx => idx < maxRows && outputs[idx] === 1)
     .sort((a, b) => a - b);
 
-  // EDGE CASE: NO ACTIVE ROWS (Output is 0)
-  //  return just the inputs and a disconnected, grayed-out Output node
   if (activeRows.length === 0) {
     const outId = getId();
     nodes.push({
@@ -49,24 +46,32 @@ export const generateCircuit = (
     return { nodes, edges };
   }
 
-  // --- PHASE 2: SHARED INVERTERS (Column 2) ---
-  // If multiple terms need "NOT A", create ONE shared gate here.
+  // --- PHASE 2: SHARED INVERTERS ---
   const inverterIds: Record<number, string> = {}; 
 
   for (let i = 0; i < numInputs; i++) {
-    // Check if ANY active row needs a '0' for this input
+    // LOGIC:
+    // Standard/NAND: Invert '0's.
+    // NOR (Multi-Input): Invert '1's (De Morgan).
+    // NOR (Single-Input): Invert '0's (Standard NOT behavior).
+    const isNorMulti = mode === 'NOR' && numInputs > 1;
+    const targetBit = isNorMulti ? '1' : '0';
+
     const needsInverter = activeRows.some(rowIndex => {
       const binary = rowIndex.toString(2).padStart(numInputs, "0");
-      return binary[i] === '0';
+      return binary[i] === targetBit;
     });
 
     if (needsInverter) {
       const invId = getId();
       inverterIds[i] = invId;
 
-      const label = mode === 'STANDARD' ? 'NOT' : 'NAND';
-      const bg = mode === 'STANDARD' ? '#fee2e2' : '#f3e8ff'; 
-      const border = mode === 'STANDARD' ? '#dc2626' : '#9333ea';
+      let label = 'NOT';
+      let bg = '#fee2e2';
+      let border = '#dc2626';
+
+      if (mode === 'NAND') { label = 'NAND'; bg = '#f3e8ff'; border = '#9333ea'; }
+      if (mode === 'NOR')  { label = 'NOR';  bg = '#ffedd5'; border = '#ea580c'; }
 
       nodes.push({
         id: invId,
@@ -84,14 +89,16 @@ export const generateCircuit = (
     }
   }
 
-  // --- PHASE 3: THE TERMS (Column 3) ---
+  // --- PHASE 3: THE TERMS ---
   const termIds: string[] = [];
 
   activeRows.forEach((rowIndex, idx) => {
-    // OPTIMIZATION: If only 1 input, don't need a gate here.
-    // The "Term" is just the source signal (either raw or inverted).
+    // OPTIMIZATION: Single Input -> Pass signal through
     if (numInputs === 1) {
       const binary = rowIndex.toString(2).padStart(numInputs, "0");
+      // FIX: Ensure we select the Inverter only if one was actually created!
+      // For Single Input NOR (NOT gate), targetBit was '0'. 
+      // Row 0 has '0'. Inverter WAS created.
       const isZero = binary[0] === '0';
       termIds.push(isZero ? inverterIds[0] : inputIds[0]);
       return; 
@@ -100,9 +107,12 @@ export const generateCircuit = (
     const gateId = getId();
     termIds.push(gateId);
 
-    const label = mode === 'STANDARD' ? 'AND' : 'NAND';
-    const color = mode === 'STANDARD' ? '#dbeafe' : '#f3e8ff';
-    const border = mode === 'STANDARD' ? '#2563eb' : '#9333ea';
+    let label = 'AND';
+    let color = '#dbeafe';
+    let border = '#2563eb';
+
+    if (mode === 'NAND') { label = 'NAND'; color = '#f3e8ff'; border = '#9333ea'; }
+    if (mode === 'NOR')  { label = 'NOR';  color = '#ffedd5'; border = '#ea580c'; }
 
     nodes.push({
       id: gateId,
@@ -114,26 +124,29 @@ export const generateCircuit = (
     // Connect Inputs -> Gate
     const binary = rowIndex.toString(2).padStart(numInputs, "0");
     binary.split("").forEach((bit, inputIdx) => {
-      const isZero = bit === "0";
-      const sourceId = isZero ? inverterIds[inputIdx] : inputIds[inputIdx];
+      // LOGIC FIX: Match Phase 2 logic exactly
+      const isNorMulti = mode === 'NOR' && numInputs > 1;
+      const targetBit = isNorMulti ? '1' : '0';
+      const needsInversion = bit === targetBit;
+      
+      const sourceId = needsInversion ? inverterIds[inputIdx] : inputIds[inputIdx];
 
       edges.push({
         id: `e-term-${gateId}-in-${inputIdx}`,
         source: sourceId,
         target: gateId,
-        // Visual polish: Red wire if coming from inverter, Gray if direct
-        style: { stroke: isZero ? '#ef4444' : '#64748b', strokeWidth: isZero ? 1.5 : 1 }, 
+        style: { stroke: needsInversion ? '#ef4444' : '#64748b', strokeWidth: needsInversion ? 1.5 : 1 }, 
       });
     });
   });
 
-  // --- PHASE 4: FINAL OUTPUT (Column 4) ---
+  // --- PHASE 4: FINAL OUTPUT ---
   const outputNodeId = getId();
   const avgY = activeRows.length > 0 ? (activeRows.length * 120) / 2 : 50;
 
   nodes.push({
     id: outputNodeId,
-    position: { x: 900, y: avgY }, 
+    position: { x: 950, y: avgY }, 
     data: { label: 'Q' },
     type: 'output',
     style: { background: '#fff', border: '1px solid #94a3b8', width: 40, fontWeight: 'bold' }
@@ -143,22 +156,20 @@ export const generateCircuit = (
   if (termIds.length === 1) {
     const termId = termIds[0];
 
-    // EDGE CASE: NAND Mode with >1 inputs needs a second inversion!
-    // Why? Because Phase 3 gate output is ~(AB). We want AB.
-    // So add a "Fixer NAND" to invert it back: ~~AB = AB.
+    // NAND needs fixer (AB)' -> AB
     if (mode === 'NAND' && numInputs > 1) {
         const fixerId = getId();
         nodes.push({
             id: fixerId,
-            position: { x: 650, y: avgY },
-            data: { label: 'NAND' }, // Acts as Inverter
+            position: { x: 700, y: avgY },
+            data: { label: 'NAND' }, 
             style: { background: '#f3e8ff', border: '1px solid #9333ea', fontSize: 10, width: 50 }
         });
-
         edges.push({ id: `e-fix-1`, source: termId, target: fixerId, style: { stroke: '#64748b' } });
         edges.push({ id: `e-fix-2`, source: fixerId, target: outputNodeId, style: { stroke: '#9333ea', strokeWidth: 2 } });
     } else {
-        // Standard Mode (or 1 input) -> Direct Connect
+        // Standard / NOR / Single Input -> Direct Connect
+        // (NOR Single Input Inverter is already handled in Phase 2)
         edges.push({
             id: `e-final-direct`,
             source: termId,
@@ -169,18 +180,25 @@ export const generateCircuit = (
 
   } else {
     // LOGIC: MULTIPLE TERMS
-    // Math Note: OR(A,B) is equivalent to NAND( ~A, ~B ).
-    // Since our terms in NAND mode are ALREADY inverted (they are NANDs), 
-    // feeding them into a final NAND perfectly recreates the OR function!
     const finalId = getId();
-    const finalLabel = mode === 'STANDARD' ? 'OR' : 'NAND';
-    const finalColor = mode === 'STANDARD' ? '#2563eb' : '#9333ea';
+    let finalLabel = 'OR';
+    let finalColor = '#2563eb';
+    let finalBorder = 'transparent';
+
+    // UNIFIED COLORS: No more "Highlighted" gate confusion
+    if (mode === 'NAND') { finalLabel = 'NAND'; finalColor = '#f3e8ff'; finalBorder = '#9333ea'; }
+    if (mode === 'NOR')  { finalLabel = 'NOR';  finalColor = '#ffedd5'; finalBorder = '#ea580c'; }
 
     nodes.push({
       id: finalId,
       position: { x: 700, y: avgY },
       data: { label: finalLabel },
-      style: { background: finalColor, color: 'white', border: '1px solid transparent' }
+      // Use the same style as other gates (Light bg, Dark border) if in NAND/NOR mode
+      style: { 
+          background: finalColor, 
+          color: mode === 'STANDARD' ? 'white' : 'black', 
+          border: mode === 'STANDARD' ? '1px solid transparent' : `1px solid ${finalBorder}` 
+      }
     });
 
     termIds.forEach((termId) => {
@@ -192,12 +210,25 @@ export const generateCircuit = (
       });
     });
 
-    edges.push({
-      id: `e-${finalId}-${outputNodeId}`,
-      source: finalId,
-      target: outputNodeId,
-      style: { stroke: finalColor, strokeWidth: 2 },
-    });
+    // NOR FIXER: (A+B)' -> A+B
+    if (mode === 'NOR') {
+        const fixerId = getId();
+        nodes.push({
+            id: fixerId,
+            position: { x: 850, y: avgY },
+            data: { label: 'NOR' }, 
+            style: { background: '#ffedd5', border: '1px solid #ea580c', fontSize: 10, width: 50 }
+        });
+        edges.push({ id: `e-mid-fix`, source: finalId, target: fixerId, style: { stroke: '#ea580c' } });
+        edges.push({ id: `e-fix-out`, source: fixerId, target: outputNodeId, style: { stroke: '#ea580c', strokeWidth: 2 } });
+    } else {
+        edges.push({
+            id: `e-${finalId}-${outputNodeId}`,
+            source: finalId,
+            target: outputNodeId,
+            style: { stroke: finalColor, strokeWidth: 2 },
+        });
+    }
   }
 
   return { nodes, edges };

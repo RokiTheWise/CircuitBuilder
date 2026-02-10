@@ -14,7 +14,7 @@ import { generateCircuit } from "@/utils/CircuitGenerator";
 import TruthTable from "@/components/truthtable";
 
 // Define the available modes
-export type GateMode = "STANDARD" | "NAND";
+export type GateMode = "STANDARD" | "NAND" | "NOR";
 
 export default function LogicLens() {
   const [numInputs, setNumInputs] = useState(3);
@@ -79,11 +79,22 @@ export default function LogicLens() {
             >
               NAND Only
             </button>
+            <button
+              onClick={() => setGateMode("NOR")}
+              className={`flex-1 py-2 text-xs font-bold rounded border transition-all
+                ${
+                  gateMode === "NOR"
+                    ? "bg-white border-orange-500 text-orange-600 shadow-sm"
+                    : "border-transparent text-slate-500 hover:bg-slate-200"
+                }`}
+            >
+              NOR Only
+            </button>
           </div>
           <p className="text-[10px] text-slate-400 mt-2 leading-tight">
             {gateMode === "STANDARD"
               ? "Sum-of-Products using AND, OR, NOT."
-              : "Universal logic using only NAND gates."}
+              : "Universal logic using only NAND or NOR gates."}
           </p>
         </div>
 
