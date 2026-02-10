@@ -198,14 +198,6 @@ const StaggeredDropDown = ({
               )
             }
           />
-          <Option
-            setOpen={setOpen}
-            Icon={FiCoffee}
-            text="Buy me a coffee"
-            onClick={() =>
-              window.open("https://buymeacoffee.com/dexterjethro", "_blank")
-            }
-          />
         </motion.ul>
       </motion.div>
     </div>
