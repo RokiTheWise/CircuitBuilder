@@ -15,6 +15,7 @@ import { getSimplifiedEquation } from "@/utils/BooleanSimplifier";
 import { parseEquationToTable } from "@/utils/EquationParser";
 import TruthTable from "@/components/truthtable";
 import Counter from "@/components/counter";
+import StaggeredDropDown from "@/components/StaggeredDropdown";
 
 export type GateMode = "STANDARD" | "NAND" | "NOR";
 
@@ -93,7 +94,12 @@ export default function LogicLens() {
   };
 
   return (
-    <div className="h-screen w-screen bg-slate-50 text-slate-900 flex overflow-hidden font-sans">
+    // FIX 1: Add ID "main-layout" here so we can screenshot the whole app
+    <div
+      id="main-layout"
+      className="h-screen w-screen bg-slate-50 text-slate-900 flex overflow-hidden font-sans"
+    >
+      {/* SIDEBAR */}
       <div className="w-[400px] border-r border-slate-200 p-6 flex flex-col gap-6 bg-white h-full overflow-y-auto shadow-xl z-10">
         {/* HEADER */}
         <div className="flex items-center gap-4 mb-2">
@@ -110,12 +116,12 @@ export default function LogicLens() {
               Logi<span className="text-blue-600">Sketch</span>
             </h1>
             <p className="text-slate-500 text-[10px] mt-1 font-bold uppercase tracking-wider">
-              Truth Table to Circuit
+              Visualize boolean logic
             </p>
           </div>
         </div>
 
-        {/* MODE SELECTOR WITH OUTLINE BUTTONS */}
+        {/* MODE SELECTOR */}
         <div className="bg-slate-100 p-4 rounded-lg border border-slate-200">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
             Implementation Mode
@@ -192,7 +198,7 @@ export default function LogicLens() {
           </div>
         </div>
 
-        {/* EQUATION INPUT */}
+        {/* EQUATION INPUT (FIXED STYLING) */}
         <div
           className={`border rounded-lg p-4 transition-all focus-within:ring-2 
             ${
@@ -216,11 +222,14 @@ export default function LogicLens() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            {" "}
+            {/* Reduced gap */}
+            {/* FIX 2: Matched font style to input (2xl, sans, black) */}
             <span
-              className={`text-lg font-mono font-bold select-none ${errorMsg ? "text-red-400" : "text-slate-400"}`}
+              className={`text-2xl font-sans font-black select-none ${errorMsg ? "text-red-400" : "text-blue-600"}`}
             >
-              Q =
+              Q=
             </span>
             <input
               id="equation-input"
@@ -228,7 +237,7 @@ export default function LogicLens() {
               value={equation}
               onChange={handleEquationChange}
               onBlur={handleBlur}
-              placeholder="e.g. AB + C'"
+              placeholder="A'B'..."
               className={`w-full bg-transparent border-none focus:outline-none text-2xl font-sans font-black placeholder-slate-300 uppercase tracking-tight
                 ${errorMsg ? "text-red-800" : "text-slate-800"}`}
               autoComplete="off"
@@ -239,7 +248,7 @@ export default function LogicLens() {
             className={`text-[10px] mt-2 transition-colors ${errorMsg ? "text-red-500 font-semibold" : "text-blue-400"}`}
           >
             {errorMsg ||
-              "Type equation to update circuit. Supported: A-E, 0, 1, +, ', (), and spaces."}
+              "Type equation to update circuit. Supported: A-E, 0, 1, +, ', ()."}
           </p>
         </div>
 
@@ -250,7 +259,15 @@ export default function LogicLens() {
         />
       </div>
 
+      {/* RIGHT PANEL */}
       <div className="flex-1 h-full relative bg-slate-50">
+        {/* DROPDOWN MENU - With Data Props Passed Down */}
+        <StaggeredDropDown
+          equation={equation}
+          numInputs={numInputs}
+          tableOutputs={tableOutputs}
+        />
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -267,12 +284,12 @@ export default function LogicLens() {
   );
 }
 
-// --- CUSTOM OUTLINE BUTTON COMPONENT ---
+// ... (DrawOutlineButton stays the same) ...
 interface DrawOutlineButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
   isActive: boolean;
-  lineColor: string; // e.g. "bg-blue-500"
-  textColor: string; // e.g. "text-blue-600"
+  lineColor: string;
+  textColor: string;
 }
 
 const DrawOutlineButton = ({
@@ -290,23 +307,15 @@ const DrawOutlineButton = ({
       `}
     >
       <span className="relative z-10">{children}</span>
-
-      {/* TOP */}
       <span
         className={`absolute left-0 top-0 h-[2px] ${lineColor} transition-all duration-100 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`}
       />
-
-      {/* RIGHT */}
       <span
         className={`absolute right-0 top-0 w-[2px] ${lineColor} transition-all delay-100 duration-100 ${isActive ? "h-full" : "h-0 group-hover:h-full"}`}
       />
-
-      {/* BOTTOM */}
       <span
         className={`absolute bottom-0 right-0 h-[2px] ${lineColor} transition-all delay-200 duration-100 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`}
       />
-
-      {/* LEFT */}
       <span
         className={`absolute bottom-0 left-0 w-[2px] ${lineColor} transition-all delay-300 duration-100 ${isActive ? "h-full" : "h-0 group-hover:h-full"}`}
       />
