@@ -1,5 +1,5 @@
 import { Node, Edge } from '@xyflow/react';
-import { getPrimeImplicants } from './BooleanSimplifier'; 
+import { getPrimeImplicants } from './BooleanSimplifier';
 
 const getLabel = (i: number) => String.fromCharCode(65 + i);
 
@@ -15,7 +15,6 @@ export const generateCircuit = (
   const getId = () => `${nodeId++}`;
 
   // 1. GET SIMPLIFIED LOGIC TERMS
-  // Instead of raw rows, we get patterns like ["1-0", "-11"]
   const terms = getPrimeImplicants(numInputs, outputs);
 
   // 2. SETUP INPUT NODES
@@ -32,17 +31,14 @@ export const generateCircuit = (
     });
   }
 
-  // EDGE CASE: Output is 0 or 1
+  // EDGE CASE: Constant Output 0 or 1
   if (terms.length === 0) {
-    // Logic 0
     const outId = getId();
     nodes.push({ id: outId, position: { x: 800, y: 50 }, data: { label: 'Q' }, type: 'output', style: { opacity: 0.5 } });
     return { nodes, edges };
   }
-  
   const isAlwaysTrue = terms.length === 1 && terms[0].split('').every(c => c === '-');
   if (isAlwaysTrue) {
-     // Logic 1 (Just connect a VCC or label)
      const outId = getId();
      nodes.push({ 
        id: outId, position: { x: 800, y: 50 }, data: { label: 'Q (1)' }, type: 'output', 
@@ -52,15 +48,12 @@ export const generateCircuit = (
   }
 
   // --- PHASE 3: SHARED INVERTERS ---
-  // We scan the simplified TERMS (not rows). 
-  // If a term has a '0' (Standard) or '1' (NOR), we need an inverter for that input.
   const inverterIds: Record<number, string> = {}; 
 
   for (let i = 0; i < numInputs; i++) {
     const isNorMulti = mode === 'NOR' && numInputs > 1;
     const targetBit = isNorMulti ? '1' : '0';
 
-    // Check if ANY term uses this input in the "inverted" state
     const needsInverter = terms.some(term => term[i] === targetBit);
 
     if (needsInverter) {
@@ -94,28 +87,28 @@ export const generateCircuit = (
   const gateIds: string[] = [];
 
   terms.forEach((term, idx) => {
-    // term is a string like "1-0" (A=1, B=Don't Care, C=0)
-    
-    // Check actual number of connected inputs in this term (ignoring '-')
+    // Check connected inputs
     const connectedInputs = term.split('').filter(c => c !== '-');
     const inputCount = connectedInputs.length;
 
-    // If it's a "single variable" term (e.g., "A"), we don't need a gate, just a wire.
-    if (inputCount === 1) {
-        // Find which input is connected
+    // LOGIC FIX: For Single Variables in NAND/NOR Mode
+    // If in NAND/NOR mode and there are multiple terms (e.g. A + BC),
+    //  MUST invert the single variable 'A' so the final layer processes it correctly.
+    // Standard mode can still skip the gate.
+    const forceGate = (mode === 'NAND' || mode === 'NOR') && terms.length > 1;
+
+    if (inputCount === 1 && !forceGate) {
+        // Direct wire optimization (Only for Standard mode or Single Term)
         const inputIndex = term.split('').findIndex(c => c !== '-');
         const bit = term[inputIndex];
-
-        // Logic Check: Do we need the raw input or the inverter?
         const isNorMulti = mode === 'NOR' && numInputs > 1;
         const targetBit = isNorMulti ? '1' : '0';
         const useInverter = bit === targetBit;
-
         gateIds.push(useInverter ? inverterIds[inputIndex] : inputIds[inputIndex]);
         return;
     }
 
-    // Otherwise, create a Gate
+    // Create a Gate (AND / NAND / NOR)
     const gateId = getId();
     gateIds.push(gateId);
 
@@ -133,9 +126,9 @@ export const generateCircuit = (
       style: { background: color, border: `1px solid ${border}`, borderRadius: '4px' }
     });
 
-    // Connect wires
+    // Connect inputs to this gate
     term.split('').forEach((bit, inputIdx) => {
-      if (bit === '-') return; // SKIP Don't Care inputs!
+      if (bit === '-') return; 
 
       const isNorMulti = mode === 'NOR' && numInputs > 1;
       const targetBit = isNorMulti ? '1' : '0';
@@ -165,18 +158,28 @@ export const generateCircuit = (
   });
 
   // SINGLE TERM LOGIC
-  if (gateIds.length === 1) {
+  if (terms.length === 1) {
     const termId = gateIds[0];
+    const term = terms[0];
+    const inputCount = term.split('').filter(c => c !== '-').length;
 
-    // Fixer logic for single terms
-    if (mode === 'NAND' && numInputs > 1) {
+    // LOGIC FIX: Only add "Fixer" if we actually went through a logic gate
+    // If inputCount == 1, skipped the gate in Phase 4 (Direct Connect), so no fixer needed.
+    // If inputCount > 1, created a NAND/NOR, so we need to fix the inversion.
+    const needsFixer = (mode === 'NAND' || mode === 'NOR') && inputCount > 1;
+
+    if (needsFixer) {
         const fixerId = getId();
+        const label = mode === 'NAND' ? 'NAND' : 'NOR';
+        const color = mode === 'NAND' ? '#f3e8ff' : '#ffedd5';
+        const border = mode === 'NAND' ? '#9333ea' : '#ea580c';
+
         nodes.push({
-            id: fixerId, position: { x: 750, y: avgY }, data: { label: 'NAND' }, 
-            style: { background: '#f3e8ff', border: '1px solid #9333ea', fontSize: 10, width: 50 }
+            id: fixerId, position: { x: 750, y: avgY }, data: { label }, 
+            style: { background: color, border: `1px solid ${border}`, fontSize: 10, width: 50 }
         });
         edges.push({ id: `e-fix-1`, source: termId, target: fixerId, style: { stroke: '#64748b' } });
-        edges.push({ id: `e-fix-2`, source: fixerId, target: outputNodeId, style: { stroke: '#9333ea', strokeWidth: 2 } });
+        edges.push({ id: `e-fix-2`, source: fixerId, target: outputNodeId, style: { stroke: border, strokeWidth: 2 } });
     } else {
         edges.push({
             id: `e-final-direct`, source: termId, target: outputNodeId, style: { stroke: '#2563eb', strokeWidth: 2 },
@@ -206,6 +209,7 @@ export const generateCircuit = (
       });
     });
 
+    // NOR Mode needs a final fixer for Sum-of-Products
     if (mode === 'NOR') {
         const fixerId = getId();
         nodes.push({
