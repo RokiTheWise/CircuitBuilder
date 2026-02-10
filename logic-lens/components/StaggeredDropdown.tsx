@@ -12,7 +12,6 @@ import { Dispatch, SetStateAction, useState } from "react";
 import { IconType } from "react-icons";
 import { toPng } from "html-to-image";
 
-// 1. Define the props we need to build the report
 interface StaggeredDropDownProps {
   equation: string;
   numInputs: number;
@@ -40,14 +39,15 @@ const StaggeredDropDown = ({
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Small pause to let the UI settle before capturing the circuit
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
       const circuitImgData = await toPng(circuitElement, {
         backgroundColor: "#ffffff",
-        // FIX: Removed the 'transform: scale(1)' which was pushing content off-screen on mobile
+        // Explicitly set dimensions to visible size to avoid scaling issues on mobile
         width: circuitElement.offsetWidth,
         height: circuitElement.offsetHeight,
-        pixelRatio: 2, // High resolution for mobile
+        pixelRatio: 3, // High quality for mobile screens
         cacheBust: true,
       });
 
@@ -132,8 +132,9 @@ const StaggeredDropDown = ({
 
       document.body.appendChild(reportContainer);
 
-      // CRITICAL FIX: Give browser time to paint the ghost element
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // FIX: Increased timeout to 500ms
+      // Mobile browsers need extra time to decode the base64 image and paint it to the DOM
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // STEP 5: Capture the Report
       const finalReportUrl = await toPng(reportContainer, {
@@ -204,6 +205,8 @@ const StaggeredDropDown = ({
     </div>
   );
 };
+
+// ... (Rest of component remains same)
 
 const Option = ({
   text,
