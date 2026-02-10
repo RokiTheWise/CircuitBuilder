@@ -1,37 +1,62 @@
 "use client";
-import React, { useState } from 'react';
-import { ReactFlow, Background, Controls } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+import React, { useState } from "react";
+import { ReactFlow, Background, Controls } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
+import TruthTable from "@/components/truthtable";
 
 export default function LogicLens() {
-  const [nodes, setNodes] = useState([
-    { id: '1', position: { x: 0, y: 0 }, data: { label: 'Input A' } },
-    { id: '2', position: { x: 0, y: 100 }, data: { label: 'Input B' } },
-  ]);
-
-
-  const [edges, setEdges] = useState([]);
+  const [numInputs, setNumInputs] = useState(3);
+  const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
 
   return (
-    <div className="h-screen w-screen bg-neutral-900 text-white flex">
-      <div className="w-1/3 border-r border-neutral-700 p-6 flex flex-col gap-4 z-10 bg-neutral-950">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-          LogicLens
-        </h1>
-        <p className="text-neutral-400 text-sm">
-          Configure your truth table to generate a circuit.
-        </p>
-        
-        <div className="p-4 border border-dashed border-neutral-700 rounded-lg text-center text-neutral-500">
-          [Truth Table Component Will Go Here]
+    <div className="h-screen w-screen bg-slate-50 text-slate-900 flex overflow-hidden font-sans">
+      <div className="w-[400px] border-r border-slate-200 p-6 flex flex-col gap-6 bg-white h-full overflow-y-auto shadow-xl z-10">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            Logic<span className="text-blue-600">Lens</span>
+          </h1>
+          <p className="text-slate-500 text-xs mt-1 font-medium">
+            Truth Table to Circuit Generator
+          </p>
         </div>
+
+        {/* Input Controls */}
+        <div className="flex items-center justify-between bg-slate-100 p-3 rounded-lg border border-slate-200">
+          <span className="text-sm font-semibold text-slate-600">
+            Inputs: {numInputs}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setNumInputs(Math.max(1, numInputs - 1))}
+              className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded shadow-sm text-xs font-bold text-slate-600 transition-all"
+            >
+              -
+            </button>
+            <button
+              onClick={() => setNumInputs(Math.min(5, numInputs + 1))}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm shadow-blue-200 text-xs font-bold transition-all"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        <TruthTable
+          numInputs={numInputs}
+          outputs={tableOutputs}
+          setOutputs={setTableOutputs}
+        />
+
+        <button className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow-lg shadow-slate-200 transition-all active:scale-[0.98]">
+          Generate Circuit
+        </button>
       </div>
 
-
-      <div className="flex-1 h-full bg-neutral-900">
-        <ReactFlow nodes={nodes} edges={edges} colorMode="dark">
-          <Background color="#444" gap={20} />
-          <Controls />
+      <div className="flex-1 h-full relative bg-slate-50">
+        <ReactFlow nodes={[]} edges={[]} colorMode="light">
+          <Background color="#cbd5e1" gap={25} size={1} />
+          <Controls className="bg-white border-slate-200 shadow-sm fill-slate-600" />
         </ReactFlow>
       </div>
     </div>
