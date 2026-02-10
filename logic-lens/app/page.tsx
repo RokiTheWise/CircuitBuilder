@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { ReactFlow, Background, Controls } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { generateCircuit } from "@/utils/CircuitGenerator";
+import { useNodesState, useEdgesState } from "@xyflow/react"; // Import hooks
 
 import TruthTable from "@/components/truthtable";
 
@@ -9,8 +11,22 @@ export default function LogicLens() {
   const [numInputs, setNumInputs] = useState(3);
   const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
 
+  // React Flow State Helpers
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  const handleGenerate = () => {
+    const { nodes: newNodes, edges: newEdges } = generateCircuit(
+      numInputs,
+      tableOutputs,
+    );
+    setNodes(newNodes);
+    setEdges(newEdges);
+  };
+
   return (
     <div className="h-screen w-screen bg-slate-50 text-slate-900 flex overflow-hidden font-sans">
+      {/* SIDEBAR */}
       <div className="w-[400px] border-r border-slate-200 p-6 flex flex-col gap-6 bg-white h-full overflow-y-auto shadow-xl z-10">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -48,13 +64,24 @@ export default function LogicLens() {
           setOutputs={setTableOutputs}
         />
 
-        <button className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow-lg shadow-slate-200 transition-all active:scale-[0.98]">
+        <button
+          onClick={handleGenerate}
+          className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow-lg shadow-slate-200 transition-all active:scale-[0.98]"
+        >
           Generate Circuit
         </button>
       </div>
 
+      {/* RIGHT PANEL */}
       <div className="flex-1 h-full relative bg-slate-50">
-        <ReactFlow nodes={[]} edges={[]} colorMode="light">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          colorMode="light"
+          fitView
+        >
           <Background color="#cbd5e1" gap={25} size={1} />
           <Controls className="bg-white border-slate-200 shadow-sm fill-slate-600" />
         </ReactFlow>
