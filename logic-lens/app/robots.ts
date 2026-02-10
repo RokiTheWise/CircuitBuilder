@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://logisketch.com/sitemap.xml",
+    sitemap: "https://logisketch.djenriquez.dev/sitemap.xml",
   };
 }
