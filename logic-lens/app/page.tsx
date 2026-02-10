@@ -9,8 +9,9 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-// Ensure this file has the updated code (accepting the 3rd 'mode' argument)
+// Import your Generator and the new Simplifier
 import { generateCircuit } from "@/utils/CircuitGenerator";
+import { getSimplifiedEquation } from "@/utils/BooleanSimplifier";
 import TruthTable from "@/components/truthtable";
 
 // Define the available modes
@@ -20,15 +21,18 @@ export default function LogicLens() {
   const [numInputs, setNumInputs] = useState(3);
   const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
 
-  // NEW: State for the Gate Mode
+  // State for the Gate Mode
   const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
+
+  // NEW: State for the simplified equation text
+  const [equation, setEquation] = useState<string>("");
 
   // React Flow State Helpers
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const handleGenerate = () => {
-    // We now pass the gateMode ('STANDARD' or 'NAND') to the generator
+    // 1. Generate the Visual Circuit
     const { nodes: newNodes, edges: newEdges } = generateCircuit(
       numInputs,
       tableOutputs,
@@ -36,6 +40,12 @@ export default function LogicLens() {
     );
     setNodes(newNodes);
     setEdges(newEdges);
+
+    // 2. Generate the Mathematical Equation (Standard Sum-of-Products)
+    // Note: We always show the standard equation (e.g. A + B) even in NAND/NOR mode
+    // because that's what the logic represents mathematically.
+    const eq = getSimplifiedEquation(numInputs, tableOutputs);
+    setEquation(eq);
   };
 
   return (
@@ -51,7 +61,7 @@ export default function LogicLens() {
           </p>
         </div>
 
-        {/* NEW: Gate Mode Selector UI */}
+        {/* Gate Mode Selector UI */}
         <div className="bg-slate-100 p-4 rounded-lg border border-slate-200">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
             Implementation Mode
@@ -77,7 +87,7 @@ export default function LogicLens() {
                     : "border-transparent text-slate-500 hover:bg-slate-200"
                 }`}
             >
-              NAND Only
+              NAND
             </button>
             <button
               onClick={() => setGateMode("NOR")}
@@ -88,13 +98,15 @@ export default function LogicLens() {
                     : "border-transparent text-slate-500 hover:bg-slate-200"
                 }`}
             >
-              NOR Only
+              NOR
             </button>
           </div>
           <p className="text-[10px] text-slate-400 mt-2 leading-tight">
             {gateMode === "STANDARD"
               ? "Sum-of-Products using AND, OR, NOT."
-              : "Universal logic using only NAND or NOR gates."}
+              : gateMode === "NAND"
+                ? "Universal logic using only NAND gates."
+                : "Universal logic using only NOR gates."}
           </p>
         </div>
 
@@ -118,6 +130,18 @@ export default function LogicLens() {
             </button>
           </div>
         </div>
+
+        {/* NEW: Equation Display Box */}
+        {equation && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in fade-in slide-in-from-top-2">
+            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block mb-1">
+              Minimized Equation
+            </span>
+            <code className="text-lg font-mono font-bold text-slate-800 break-words">
+              Q = {equation}
+            </code>
+          </div>
+        )}
 
         <TruthTable
           numInputs={numInputs}
