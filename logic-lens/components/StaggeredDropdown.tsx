@@ -40,27 +40,30 @@ const StaggeredDropDown = ({
         return;
       }
 
-      // Force a specific size for the circuit capture to ensure high quality
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       const circuitImgData = await toPng(circuitElement, {
         backgroundColor: "#ffffff",
-        style: { transform: "scale(1)" },
-        cacheBust: true, // Force new fetch
+        // FIX: Removed the 'transform: scale(1)' which was pushing content off-screen on mobile
+        width: circuitElement.offsetWidth,
+        height: circuitElement.offsetHeight,
+        pixelRatio: 2, // High resolution for mobile
+        cacheBust: true,
       });
 
       // STEP 2: Build the "Ghost" Report Container
       const reportContainer = document.createElement("div");
-      // Use fixed positioning behind everything to force rendering without being visible
       reportContainer.style.position = "fixed";
       reportContainer.style.top = "0";
       reportContainer.style.left = "0";
-      reportContainer.style.zIndex = "-100"; // Behind everything
+      reportContainer.style.zIndex = "-100";
       reportContainer.style.width = "800px";
       reportContainer.style.padding = "40px";
       reportContainer.style.backgroundColor = "#ffffff";
       reportContainer.style.fontFamily = "sans-serif";
       reportContainer.style.color = "#0f172a";
 
-      // STEP 3: Generate Truth Table HTML (Same logic as before)
+      // STEP 3: Generate Truth Table HTML
       let tableRows = "";
       const maxRows = Math.pow(2, numInputs);
       const headers = Array.from({ length: numInputs }, (_, i) =>
@@ -127,19 +130,17 @@ const StaggeredDropDown = ({
         </div>
       `;
 
-      // Append to body so it renders
       document.body.appendChild(reportContainer);
 
-      // CRITICAL FIX: Wait a tiny bit for the DOM to settle and image to "paint"
+      // CRITICAL FIX: Give browser time to paint the ghost element
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // STEP 5: Capture the Report
       const finalReportUrl = await toPng(reportContainer, {
         cacheBust: true,
-        pixelRatio: 2, // Better quality
+        pixelRatio: 2,
       });
 
-      // Cleanup
       document.body.removeChild(reportContainer);
 
       // STEP 6: Trigger Download
