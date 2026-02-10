@@ -10,7 +10,7 @@ import {
 import { motion } from "framer-motion";
 import { Dispatch, SetStateAction, useState } from "react";
 import { IconType } from "react-icons";
-import { toPng } from "html-to-image";
+import { toPng, toJpeg } from "html-to-image";
 
 interface StaggeredDropDownProps {
   equation: string;
@@ -39,15 +39,17 @@ const StaggeredDropDown = ({
         return;
       }
 
-      // Small pause to let the UI settle before capturing the circuit
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // FIX 1: Wait for mobile rendering
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
-      const circuitImgData = await toPng(circuitElement, {
+      // FIX 2: Use toJpeg instead of toPng for the circuit part
+      // and LOWER the pixelRatio to 1. Mobile browsers crash with high-res canvas.
+      const circuitImgData = await toJpeg(circuitElement, {
+        quality: 0.9,
         backgroundColor: "#ffffff",
-        // Explicitly set dimensions to visible size to avoid scaling issues on mobile
         width: circuitElement.offsetWidth,
         height: circuitElement.offsetHeight,
-        pixelRatio: 3, // High quality for mobile screens
+        pixelRatio: 1, // Crucial: Keep this at 1 for mobile stability
         cacheBust: true,
       });
 
@@ -132,14 +134,14 @@ const StaggeredDropDown = ({
 
       document.body.appendChild(reportContainer);
 
-      // FIX: Increased timeout to 500ms
-      // Mobile browsers need extra time to decode the base64 image and paint it to the DOM
+      // FIX 3: Wait for ghost element to paint
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // STEP 5: Capture the Report
+      // STEP 5: Capture the Report (Safe to use PNG here for crisp text)
+      // Keep pixelRatio at 1.5 or 1 for safety on mobile
       const finalReportUrl = await toPng(reportContainer, {
         cacheBust: true,
-        pixelRatio: 2,
+        pixelRatio: 1.5,
       });
 
       document.body.removeChild(reportContainer);
@@ -151,6 +153,7 @@ const StaggeredDropDown = ({
       a.click();
     } catch (err) {
       console.error("Report generation failed:", err);
+      alert("Mobile generation failed. Please try again.");
     } finally {
       setIsGenerating(false);
     }
