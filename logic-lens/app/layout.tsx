@@ -29,16 +29,27 @@ export const metadata: Metadata = {
   description:
     "The ultimate logic circuit simulator. Convert Boolean equations to interactive circuits, generate truth tables, and simplify logic instantly. Supports NAND/NOR universal logic.",
   keywords: [
+    // Core Concepts
     "boolean algebra",
-    "logic circuit simulator",
-    "truth table generator",
-    "digital logic",
-    "computer science tool",
     "logic gates",
+    "digital logic",
     "NAND implementation",
     "NOR implementation",
     "karnaugh map",
+
+    // High-Intent Action Phrases (The "Golden" Keywords)
+    "truth table to circuit",
+    "boolean expression to circuit generator",
+    "equation to logic gates",
+    "logic circuit simulator",
+    "truth table generator",
+
+    // Use Case / Audience
+    "computer science tool",
+    "digital electronics simulation",
     "circuit solver",
+    "logic gate visualizer",
+    "interactive circuit diagram",
   ],
   authors: [{ name: "Dexter Jethro Enriquez", url: "https://djenriquez.dev" }],
   creator: "Dexter Jethro Enriquez",
