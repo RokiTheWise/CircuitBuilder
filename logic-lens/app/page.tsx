@@ -66,7 +66,7 @@ export default function LogicLens() {
       <div className="w-[400px] border-r border-slate-200 p-6 flex flex-col gap-6 bg-white h-full overflow-y-auto shadow-xl z-10">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            Logic<span className="text-blue-600">Lens</span>
+            Logi<span className="text-blue-600">Sketch</span>
           </h1>
           <p className="text-slate-500 text-xs mt-1 font-medium">
             Truth Table to Circuit Generator
@@ -140,13 +140,13 @@ export default function LogicLens() {
               onChange={handleEquationChange}
               onBlur={handleBlur}
               placeholder="e.g. AB + C'"
-              // UPDATED STYLING: Sans-serif, bold, tighter tracking for professional math look
               className="w-full bg-transparent border-none focus:outline-none text-2xl font-sans font-black text-slate-800 placeholder-slate-300 uppercase tracking-tight"
               autoComplete="off"
             />
           </div>
           <p className="text-[10px] text-blue-400 mt-2">
-            Type equation to update circuit. Supported: A, B, +, '
+            Type equation to update circuit. Supported: A to E, +, ', (), and
+            spaces.
           </p>
         </div>
 

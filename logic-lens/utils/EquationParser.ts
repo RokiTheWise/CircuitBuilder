@@ -8,15 +8,13 @@ export function parseEquationToTable(equation: string, numInputs: number): Recor
     .toUpperCase()
     .replace(/[\u2018\u2019`]/g, "'") // Handle smart quotes
     .replace(/\s+/g, '')              // Remove spaces
-    .split('')                        // <--- THE FIX: Split into individual chars
+    .split('')                        // Split into individual chars
     .filter(t => /[A-Z+()']/.test(t)); // Keep only valid logic characters
 
   let pos = 0;
 
   function peek() { return tokens[pos]; }
   function consume() { return tokens[pos++]; }
-  
-  // ... (The rest of the file stays exactly the same) ...
   
   // 2. Parser Functions
   function parseExpression(): boolean {
@@ -29,7 +27,6 @@ export function parseEquationToTable(equation: string, numInputs: number): Recor
     return left;
   }
   
-  // ... continue with parseTerm, parseFactor, etc. as you had them ...
   function parseTerm(): boolean {
     let left = parseFactor();
     while (pos < tokens.length && peek() !== '+' && peek() !== ')') {
