@@ -1,24 +1,38 @@
 "use client";
 import React, { useState } from "react";
-import { ReactFlow, Background, Controls } from "@xyflow/react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  useNodesState,
+  useEdgesState,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { generateCircuit } from "@/utils/CircuitGenerator";
-import { useNodesState, useEdgesState } from "@xyflow/react"; // Import hooks
 
+// Ensure this file has the updated code (accepting the 3rd 'mode' argument)
+import { generateCircuit } from "@/utils/CircuitGenerator";
 import TruthTable from "@/components/truthtable";
+
+// Define the available modes
+export type GateMode = "STANDARD" | "NAND";
 
 export default function LogicLens() {
   const [numInputs, setNumInputs] = useState(3);
   const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
+
+  // NEW: State for the Gate Mode
+  const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
 
   // React Flow State Helpers
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   const handleGenerate = () => {
+    // We now pass the gateMode ('STANDARD' or 'NAND') to the generator
     const { nodes: newNodes, edges: newEdges } = generateCircuit(
       numInputs,
       tableOutputs,
+      gateMode,
     );
     setNodes(newNodes);
     setEdges(newEdges);
@@ -34,6 +48,42 @@ export default function LogicLens() {
           </h1>
           <p className="text-slate-500 text-xs mt-1 font-medium">
             Truth Table to Circuit Generator
+          </p>
+        </div>
+
+        {/* NEW: Gate Mode Selector UI */}
+        <div className="bg-slate-100 p-4 rounded-lg border border-slate-200">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+            Implementation Mode
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setGateMode("STANDARD")}
+              className={`flex-1 py-2 text-xs font-bold rounded border transition-all
+                ${
+                  gateMode === "STANDARD"
+                    ? "bg-white border-blue-500 text-blue-600 shadow-sm"
+                    : "border-transparent text-slate-500 hover:bg-slate-200"
+                }`}
+            >
+              Standard
+            </button>
+            <button
+              onClick={() => setGateMode("NAND")}
+              className={`flex-1 py-2 text-xs font-bold rounded border transition-all
+                ${
+                  gateMode === "NAND"
+                    ? "bg-white border-purple-500 text-purple-600 shadow-sm"
+                    : "border-transparent text-slate-500 hover:bg-slate-200"
+                }`}
+            >
+              NAND Only
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 leading-tight">
+            {gateMode === "STANDARD"
+              ? "Sum-of-Products using AND, OR, NOT."
+              : "Universal logic using only NAND gates."}
           </p>
         </div>
 
