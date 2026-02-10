@@ -1,3 +1,4 @@
+// src/utils/CircuitGenerator.ts
 import { Node, Edge } from '@xyflow/react';
 import { getPrimeImplicants } from './BooleanSimplifier';
 
@@ -87,28 +88,27 @@ export const generateCircuit = (
   const gateIds: string[] = [];
 
   terms.forEach((term, idx) => {
-    // Check connected inputs
     const connectedInputs = term.split('').filter(c => c !== '-');
     const inputCount = connectedInputs.length;
+    
+    const isNorMulti = mode === 'NOR' && numInputs > 1;
 
-    // LOGIC FIX: For Single Variables in NAND/NOR Mode
-    // If in NAND/NOR mode and there are multiple terms (e.g. A + BC),
-    //  MUST invert the single variable 'A' so the final layer processes it correctly.
-    // Standard mode can still skip the gate.
-    const forceGate = (mode === 'NAND' || mode === 'NOR') && terms.length > 1;
+    // LOGIC FIX 1: FORCE GATES
+    // In NOR-Multi mode, inputs are pre-inverted (De Morgan). 
+    // MUST force the gate to correct it back to A.
+    const forceGate = (mode === 'NAND' && terms.length > 1) || isNorMulti;
 
     if (inputCount === 1 && !forceGate) {
-        // Direct wire optimization (Only for Standard mode or Single Term)
+        // Direct wire optimization (Standard Mode or Single-Input NAND)
         const inputIndex = term.split('').findIndex(c => c !== '-');
         const bit = term[inputIndex];
-        const isNorMulti = mode === 'NOR' && numInputs > 1;
-        const targetBit = isNorMulti ? '1' : '0';
+        const targetBit = '0'; // Standard target
         const useInverter = bit === targetBit;
         gateIds.push(useInverter ? inverterIds[inputIndex] : inputIds[inputIndex]);
         return;
     }
 
-    // Create a Gate (AND / NAND / NOR)
+    // Create a Gate
     const gateId = getId();
     gateIds.push(gateId);
 
@@ -126,11 +126,10 @@ export const generateCircuit = (
       style: { background: color, border: `1px solid ${border}`, borderRadius: '4px' }
     });
 
-    // Connect inputs to this gate
+    // Connect inputs
     term.split('').forEach((bit, inputIdx) => {
       if (bit === '-') return; 
 
-      const isNorMulti = mode === 'NOR' && numInputs > 1;
       const targetBit = isNorMulti ? '1' : '0';
       const useInverter = bit === targetBit;
       
@@ -163,23 +162,19 @@ export const generateCircuit = (
     const term = terms[0];
     const inputCount = term.split('').filter(c => c !== '-').length;
 
-    // LOGIC FIX: Only add "Fixer" if we actually went through a logic gate
-    // If inputCount == 1, skipped the gate in Phase 4 (Direct Connect), so no fixer needed.
-    // If inputCount > 1, created a NAND/NOR, so we need to fix the inversion.
-    const needsFixer = (mode === 'NAND' || mode === 'NOR') && inputCount > 1;
+    // LOGIC FIX 2: NO FIXER FOR NOR
+    // NAND(A,B) = (AB)'. Needs fixer to be AB.
+    // NOR(A',B') = (A'+B')' = AB. Already positive! No fixer needed.
+    const needsFixer = (mode === 'NAND' && inputCount > 1);
 
     if (needsFixer) {
         const fixerId = getId();
-        const label = mode === 'NAND' ? 'NAND' : 'NOR';
-        const color = mode === 'NAND' ? '#f3e8ff' : '#ffedd5';
-        const border = mode === 'NAND' ? '#9333ea' : '#ea580c';
-
         nodes.push({
-            id: fixerId, position: { x: 750, y: avgY }, data: { label }, 
-            style: { background: color, border: `1px solid ${border}`, fontSize: 10, width: 50 }
+            id: fixerId, position: { x: 750, y: avgY }, data: { label: 'NAND' }, 
+            style: { background: '#f3e8ff', border: '1px solid #9333ea', fontSize: 10, width: 50 }
         });
         edges.push({ id: `e-fix-1`, source: termId, target: fixerId, style: { stroke: '#64748b' } });
-        edges.push({ id: `e-fix-2`, source: fixerId, target: outputNodeId, style: { stroke: border, strokeWidth: 2 } });
+        edges.push({ id: `e-fix-2`, source: fixerId, target: outputNodeId, style: { stroke: '#9333ea', strokeWidth: 2 } });
     } else {
         edges.push({
             id: `e-final-direct`, source: termId, target: outputNodeId, style: { stroke: '#2563eb', strokeWidth: 2 },
@@ -209,7 +204,6 @@ export const generateCircuit = (
       });
     });
 
-    // NOR Mode needs a final fixer for Sum-of-Products
     if (mode === 'NOR') {
         const fixerId = getId();
         nodes.push({

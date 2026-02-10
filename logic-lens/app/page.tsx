@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -9,30 +9,25 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-// Import your Generator and the new Simplifier
 import { generateCircuit } from "@/utils/CircuitGenerator";
 import { getSimplifiedEquation } from "@/utils/BooleanSimplifier";
+import { parseEquationToTable } from "@/utils/EquationParser";
 import TruthTable from "@/components/truthtable";
 
-// Define the available modes
 export type GateMode = "STANDARD" | "NAND" | "NOR";
 
 export default function LogicLens() {
   const [numInputs, setNumInputs] = useState(3);
   const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
-
-  // State for the Gate Mode
   const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
-
-  // NEW: State for the simplified equation text
   const [equation, setEquation] = useState<string>("");
+  const [isTyping, setIsTyping] = useState(false);
 
-  // React Flow State Helpers
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  const handleGenerate = () => {
-    // 1. Generate the Visual Circuit
+  // 1. AUTO-GENERATOR
+  useEffect(() => {
     const { nodes: newNodes, edges: newEdges } = generateCircuit(
       numInputs,
       tableOutputs,
@@ -41,16 +36,33 @@ export default function LogicLens() {
     setNodes(newNodes);
     setEdges(newEdges);
 
-    // 2. Generate the Mathematical Equation (Standard Sum-of-Products)
-    // Note: We always show the standard equation (e.g. A + B) even in NAND/NOR mode
-    // because that's what the logic represents mathematically.
+    if (!isTyping) {
+      const eq = getSimplifiedEquation(numInputs, tableOutputs);
+      setEquation(eq);
+    }
+  }, [numInputs, tableOutputs, gateMode, isTyping]);
+
+  // 2. INPUT HANDLER
+  const handleEquationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setEquation(val);
+    setIsTyping(true);
+
+    const newTable = parseEquationToTable(val, numInputs);
+    if (newTable) {
+      setTableOutputs(newTable);
+    }
+  };
+
+  // 3. BLUR HANDLER
+  const handleBlur = () => {
+    setIsTyping(false);
     const eq = getSimplifiedEquation(numInputs, tableOutputs);
     setEquation(eq);
   };
 
   return (
     <div className="h-screen w-screen bg-slate-50 text-slate-900 flex overflow-hidden font-sans">
-      {/* SIDEBAR */}
       <div className="w-[400px] border-r border-slate-200 p-6 flex flex-col gap-6 bg-white h-full overflow-y-auto shadow-xl z-10">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -61,7 +73,7 @@ export default function LogicLens() {
           </p>
         </div>
 
-        {/* Gate Mode Selector UI */}
+        {/* Mode Selector */}
         <div className="bg-slate-100 p-4 rounded-lg border border-slate-200">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
             Implementation Mode
@@ -69,48 +81,26 @@ export default function LogicLens() {
           <div className="flex gap-2">
             <button
               onClick={() => setGateMode("STANDARD")}
-              className={`flex-1 py-2 text-xs font-bold rounded border transition-all
-                ${
-                  gateMode === "STANDARD"
-                    ? "bg-white border-blue-500 text-blue-600 shadow-sm"
-                    : "border-transparent text-slate-500 hover:bg-slate-200"
-                }`}
+              className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${gateMode === "STANDARD" ? "bg-white border-blue-500 text-blue-600 shadow-sm" : "border-transparent text-slate-500 hover:bg-slate-200"}`}
             >
               Standard
             </button>
             <button
               onClick={() => setGateMode("NAND")}
-              className={`flex-1 py-2 text-xs font-bold rounded border transition-all
-                ${
-                  gateMode === "NAND"
-                    ? "bg-white border-purple-500 text-purple-600 shadow-sm"
-                    : "border-transparent text-slate-500 hover:bg-slate-200"
-                }`}
+              className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${gateMode === "NAND" ? "bg-white border-purple-500 text-purple-600 shadow-sm" : "border-transparent text-slate-500 hover:bg-slate-200"}`}
             >
               NAND
             </button>
             <button
               onClick={() => setGateMode("NOR")}
-              className={`flex-1 py-2 text-xs font-bold rounded border transition-all
-                ${
-                  gateMode === "NOR"
-                    ? "bg-white border-orange-500 text-orange-600 shadow-sm"
-                    : "border-transparent text-slate-500 hover:bg-slate-200"
-                }`}
+              className={`flex-1 py-2 text-xs font-bold rounded border transition-all ${gateMode === "NOR" ? "bg-white border-orange-500 text-orange-600 shadow-sm" : "border-transparent text-slate-500 hover:bg-slate-200"}`}
             >
               NOR
             </button>
           </div>
-          <p className="text-[10px] text-slate-400 mt-2 leading-tight">
-            {gateMode === "STANDARD"
-              ? "Sum-of-Products using AND, OR, NOT."
-              : gateMode === "NAND"
-                ? "Universal logic using only NAND gates."
-                : "Universal logic using only NOR gates."}
-          </p>
         </div>
 
-        {/* Input Controls */}
+        {/* Inputs */}
         <div className="flex items-center justify-between bg-slate-100 p-3 rounded-lg border border-slate-200">
           <span className="text-sm font-semibold text-slate-600">
             Inputs: {numInputs}
@@ -118,46 +108,55 @@ export default function LogicLens() {
           <div className="flex gap-2">
             <button
               onClick={() => setNumInputs(Math.max(1, numInputs - 1))}
-              className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded shadow-sm text-xs font-bold text-slate-600 transition-all"
+              className="px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded shadow-sm text-xs font-bold text-slate-600"
             >
               -
             </button>
             <button
               onClick={() => setNumInputs(Math.min(5, numInputs + 1))}
-              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm shadow-blue-200 text-xs font-bold transition-all"
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-sm shadow-blue-200 text-xs font-bold"
             >
               +
             </button>
           </div>
         </div>
 
-        {/* NEW: Equation Display Box */}
-        {equation && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-in fade-in slide-in-from-top-2">
-            <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block mb-1">
-              Minimized Equation
+        {/* Equation Input */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 transition-all focus-within:ring-2 focus-within:ring-blue-400">
+          <label
+            htmlFor="equation-input"
+            className="text-[10px] font-bold text-blue-500 uppercase tracking-wider block mb-1"
+          >
+            Boolean Equation
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-mono font-bold text-slate-400 select-none">
+              Q =
             </span>
-            <code className="text-lg font-mono font-bold text-slate-800 break-words">
-              Q = {equation}
-            </code>
+            <input
+              id="equation-input"
+              type="text"
+              value={equation}
+              onChange={handleEquationChange}
+              onBlur={handleBlur}
+              placeholder="e.g. AB + C'"
+              // UPDATED STYLING: Sans-serif, bold, tighter tracking for professional math look
+              className="w-full bg-transparent border-none focus:outline-none text-2xl font-sans font-black text-slate-800 placeholder-slate-300 uppercase tracking-tight"
+              autoComplete="off"
+            />
           </div>
-        )}
+          <p className="text-[10px] text-blue-400 mt-2">
+            Type equation to update circuit. Supported: A, B, +, '
+          </p>
+        </div>
 
         <TruthTable
           numInputs={numInputs}
           outputs={tableOutputs}
           setOutputs={setTableOutputs}
         />
-
-        <button
-          onClick={handleGenerate}
-          className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg shadow-lg shadow-slate-200 transition-all active:scale-[0.98]"
-        >
-          Generate Circuit
-        </button>
       </div>
 
-      {/* RIGHT PANEL */}
       <div className="flex-1 h-full relative bg-slate-50">
         <ReactFlow
           nodes={nodes}
