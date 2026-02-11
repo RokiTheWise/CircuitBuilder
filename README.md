@@ -3,6 +3,8 @@
 ![LogiSketch Banner](logic-lens/public/LogiSketch.png)
 **LogiSketch** is an interactive web tool designed to bridge the gap between Boolean algebra and digital logic circuits. It parses boolean equations in real-time, generates truth tables, and visualizes the corresponding logic circuit diagram instantly.
 
+👉 Try it live: [logisketch.djenriquez.dev](https://logisketch.djenriquez.dev)
+
 Built for students, engineers, and hobbyists, LogiSketch simplifies the process of visualizing digital logic.
 
 ## 🚀 Features
@@ -72,9 +74,6 @@ Built for students, engineers, and hobbyists, LogiSketch simplifies the process 
 - [x] Basic Gate Implementation
 - [x] Universal Logic (NAND/NOR)
 - [x] Report Generation
-- [ ] Karnaugh Map (K-Map) Visualization
-- [ ] Shareable URLs (Deep linking)
-- [ ] Dark Mode
 
 ## 🤝 Contributing
 
