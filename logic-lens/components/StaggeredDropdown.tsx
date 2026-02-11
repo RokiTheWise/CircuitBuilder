@@ -30,56 +30,29 @@ const StaggeredDropDown = ({
   const handleDownload = async () => {
     setIsGenerating(true);
     try {
-      // STEP 1: Capture the FULL Circuit Visual (no cropping)
-      const renderer = document.querySelector(
+      // STEP 1: Capture the Circuit Visual
+      const circuitElement = document.querySelector(
         ".react-flow__renderer",
       ) as HTMLElement;
 
-      const viewport = renderer?.querySelector(
-        ".react-flow__viewport",
-      ) as HTMLElement;
-
-      if (!renderer || !viewport) {
-        console.error("React Flow elements not found");
+      if (!circuitElement) {
+        console.error("Circuit element not found");
         return;
       }
 
-      // Save original styles
-      const prevTransform = viewport.style.transform;
-      const prevWidth = renderer.style.width;
-      const prevHeight = renderer.style.height;
+      // FIX 1: Wait for mobile rendering
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
-      // Force identity transform so bounds are real
-      viewport.style.transform = "none";
-
-      // Measure full graph bounds
-      const bbox = viewport.getBoundingClientRect();
-
-      // Add padding so gates aren’t flush
-      const PADDING = 80;
-      const width = Math.ceil(bbox.width + PADDING);
-      const height = Math.ceil(bbox.height + PADDING);
-
-      // Temporarily expand renderer
-      renderer.style.width = `${width}px`;
-      renderer.style.height = `${height}px`;
-
-      // Let layout settle
-      await new Promise((r) => setTimeout(r, 300));
-
-      // Capture
-      const circuitImgData = await toPng(renderer, {
+      // FIX 2: Use toJpeg instead of toPng for the circuit part
+      // and LOWER the pixelRatio to 1. Mobile browsers crash with high-res canvas.
+      const circuitImgData = await toJpeg(circuitElement, {
+        quality: 0.9,
         backgroundColor: "#ffffff",
-        width,
-        height,
-        pixelRatio: 2,
+        width: circuitElement.offsetWidth,
+        height: circuitElement.offsetHeight,
+        pixelRatio: 1, // Crucial: Keep this at 1 for mobile stability
         cacheBust: true,
       });
-
-      // Restore original styles
-      viewport.style.transform = prevTransform;
-      renderer.style.width = prevWidth;
-      renderer.style.height = prevHeight;
 
       // STEP 2: Build the "Ghost" Report Container
       const reportContainer = document.createElement("div");
@@ -149,11 +122,7 @@ const StaggeredDropDown = ({
           <div style="flex: 1;">
             <h3 style="font-size: 14px; text-transform: uppercase; color: #64748b; font-weight: bold; margin-bottom: 10px;">Logic Circuit</h3>
             <div style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
-              <img
-  src="${circuitImgData}"
-  style="max-width: 100%; height: auto; display: block;"
-/>
-
+              <img src="${circuitImgData}" style="width: 100%; display: block;" />
             </div>
           </div>
 
@@ -169,10 +138,11 @@ const StaggeredDropDown = ({
       // FIX 3: Wait for ghost element to paint
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // STEP 5: Capture the Report as an Image
+      // STEP 5: Capture the Report (Safe to use PNG here for crisp text)
+      // Keep pixelRatio at 1.5 or 1 for safety on mobile
       const finalReportUrl = await toPng(reportContainer, {
-        pixelRatio: 2,
         cacheBust: true,
+        pixelRatio: 1.5,
       });
 
       document.body.removeChild(reportContainer);
