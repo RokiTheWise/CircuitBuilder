@@ -13,10 +13,13 @@ export default function SmartStepEdge({
   data,
 }: EdgeProps) {
   const offset = (data?.offset as number) || 0;
-  const showDot = data?.hasDot as boolean; // Read the flag
+  const laneX = data?.laneX as number;
+  const showDot = data?.hasDot as boolean;
 
-  // Calculate the vertical lane
-  const centerX = (sourceX + targetX) / 2 + offset;
+  // CRITICAL FIX: If a lane is specified (like 100 or 160), USE IT.
+  // Otherwise, fallback to the calculated midpoint.
+  const centerX =
+    laneX !== undefined ? laneX : (sourceX + targetX) / 2 + offset;
 
   const [edgePath] = getSmoothStepPath({
     sourceX,
@@ -25,15 +28,18 @@ export default function SmartStepEdge({
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 0, // Sharp corners
-    centerX,
+    borderRadius: 0,
+    centerX, // Now uses the forced lane
   });
+
+  // Dot Logic: Snap to the calculated wire position
+  const dotX = (data?.dotX as number) ?? centerX;
+  const dotY = (data?.dotY as number) ?? sourceY;
 
   const strokeColor = style.stroke || "#334155";
 
   return (
     <>
-      {/* 1. HALO (Bridge effect) */}
       <path
         d={edgePath}
         fill="none"
@@ -41,22 +47,9 @@ export default function SmartStepEdge({
         strokeWidth={7}
         style={{ pointerEvents: "none" }}
       />
-
-      {/* 2. WIRE */}
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
-
-      {/* 3. JUNCTION DOT 
-          - Drawn on TOP of the wire
-          - Uses the wire's color (red for selected, slate for normal)
-      */}
       {showDot && (
-        <circle
-          cx={centerX}
-          cy={sourceY}
-          r={4}
-          fill={strokeColor}
-          stroke="none"
-        />
+        <circle cx={dotX} cy={dotY} r={4} fill={strokeColor} stroke="none" />
       )}
     </>
   );
