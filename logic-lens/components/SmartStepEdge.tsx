@@ -14,9 +14,9 @@ export default function SmartStepEdge({
 }: EdgeProps) {
   const offset = (data?.offset as number) || 0;
 
-  // Calculate the vertical lane (centerX).
-  // Standard SmoothStep uses 50% ((sX+tX)/2).
-  // We apply the offset relative to that midpoint.
+  // FIX: Read 'hasDot' instead of 'isBranching' to match the generator
+  const showDot = data?.hasDot as boolean;
+
   const centerX = (sourceX + targetX) / 2 + offset;
 
   const [edgePath] = getSmoothStepPath({
@@ -26,7 +26,7 @@ export default function SmartStepEdge({
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 15, // Increased radius for smoother, less "robotic" turns
+    borderRadius: 0, // Keep sharp corners for precision
     centerX,
   });
 
@@ -34,20 +34,31 @@ export default function SmartStepEdge({
 
   return (
     <>
-      {/* 1. THE HALO (Background Bridge) */}
+      {/* 1. HALO (Bridge effect) */}
       <path
         d={edgePath}
         fill="none"
         stroke="#ffffff"
-        strokeWidth={7} // Slightly thicker halo for better separation
+        strokeWidth={7}
         style={{ pointerEvents: "none" }}
       />
 
-      {/* 2. THE WIRE */}
+      {/* 2. WIRE */}
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
 
-      {/* 3. JUNCTION DOT */}
-      <circle cx={sourceX} cy={sourceY} r={3} fill={strokeColor} />
+      {/* 3. JUNCTION DOT 
+          Only renders if 'hasDot' is true (calculated by generator).
+          Places a solder dot exactly at the T-junction corner.
+      */}
+      {showDot && (
+        <circle
+          cx={centerX}
+          cy={sourceY}
+          r={3.5}
+          fill={strokeColor}
+          stroke="none"
+        />
+      )}
     </>
   );
 }

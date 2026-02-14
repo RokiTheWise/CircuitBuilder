@@ -2,7 +2,6 @@ import React, { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 
 const PATHS = {
-  // Shifted paths slightly to make room for leads
   AND: "M15,5 V45 H35 A20,20 0 0,0 35,5 Z",
   OR: "M15,5 C25,15 25,35 15,45 C40,45 55,35 55,25 C55,15 40,5 15,5 Z",
   NOT: "M15,5 V45 L45,25 Z",
@@ -17,16 +16,13 @@ const PATHS = {
 const SchematicNode = ({ data }: NodeProps) => {
   const type = data.symbolType as string;
   const label = data.label as string;
-
-  // Default to 1 input if not specified (safe fallback)
   const inputCount = (data.inputCount as number) || 1;
 
   const isGate = ["AND", "NAND", "OR", "NOR", "XOR"].includes(type);
   const isMultiInput = isGate && inputCount > 1;
 
-  // Helper to generate dynamic handle positions
+  // --- Dynamic Input Handles ---
   const renderInputHandles = () => {
-    // If it's a NOT gate or Voltmeter, just use one center handle
     if (!isMultiInput) {
       return (
         <Handle
@@ -37,18 +33,14 @@ const SchematicNode = ({ data }: NodeProps) => {
         />
       );
     }
-
-    // For multi-input gates, generate handles evenly spaced
     return Array.from({ length: inputCount }).map((_, i) => {
-      // Calculate percentage: e.g. for 2 inputs -> 33% and 66%
-      // e.g. for 3 inputs -> 25%, 50%, 75%
       const topPos = ((i + 1) / (inputCount + 1)) * 100;
       return (
         <Handle
           key={i}
           type="target"
           position={Position.Left}
-          id={`in-${i}`} // Important: IDs must match what Generator produces
+          id={`in-${i}`}
           style={{ top: `${topPos}%`, left: 0, opacity: 0, background: "blue" }}
         />
       );
@@ -57,7 +49,7 @@ const SchematicNode = ({ data }: NodeProps) => {
 
   return (
     <div className="relative group w-[60px] h-[50px] flex items-center justify-center">
-      {/* 1. TOP HANDLE (Power/GND) */}
+      {/* 1. TOP HANDLE */}
       {(type === "SWITCH" || type === "GND" || type === "BATTERY") && (
         <Handle
           type="target"
@@ -67,7 +59,7 @@ const SchematicNode = ({ data }: NodeProps) => {
         />
       )}
 
-      {/* 2. DYNAMIC INPUT HANDLES */}
+      {/* 2. INPUT HANDLES */}
       {(isGate || type === "NOT" || type === "VOLTMETER") &&
         renderInputHandles()}
 
@@ -78,22 +70,42 @@ const SchematicNode = ({ data }: NodeProps) => {
         viewBox="0 0 60 50"
         className="stroke-slate-900 stroke-2 fill-white overflow-visible"
       >
-        {/* Draw "Leads" for every input handle */}
-        {isMultiInput &&
-          Array.from({ length: inputCount }).map((_, i) => {
-            // Must match the % calculation above: 50 * percentage
-            const yPos = 50 * ((i + 1) / (inputCount + 1));
-            return (
-              <path key={i} d={`M0,${yPos} H15`} strokeWidth="2" fill="none" />
-            );
-          })}
-
-        {/* Single input lead (NOT gate / Voltmeter) */}
-        {!isMultiInput && (type === "NOT" || isGate) && (
-          <path d="M0,25 H15" strokeWidth="2" fill="none" />
+        {/* --- INPUT LEADS (Left side) --- */}
+        {isMultiInput
+          ? Array.from({ length: inputCount }).map((_, i) => {
+              const yPos = 50 * ((i + 1) / (inputCount + 1));
+              return (
+                <path
+                  key={i}
+                  d={`M0,${yPos} H15`}
+                  strokeWidth="2"
+                  fill="none"
+                />
+              );
+            })
+          : (type === "NOT" || isGate) && (
+              <path d="M0,25 H15" strokeWidth="2" fill="none" />
+            )}
+        {/* --- OUTPUT LEADS (Right side) --- */}
+        {/* Connect the symbol to the Right Handle (x=60) */}
+        {type === "SWITCH" && (
+          <path
+            d="M25,15 H60"
+            strokeWidth="2"
+            fill="none"
+            strokeDasharray="2,2"
+            className="stroke-slate-300"
+          />
+        )}{" "}
+        {/* Pivot line */}
+        {(type === "AND" || type === "NAND") && (
+          <path d="M35,25 H60" strokeWidth="2" fill="none" />
         )}
-
-        {/* Symbols */}
+        {type === "NOT" && <path d="M45,25 H60" strokeWidth="2" fill="none" />}
+        {(type === "OR" || type === "NOR") && (
+          <path d="M55,25 H60" strokeWidth="2" fill="none" />
+        )}
+        {/* --- SYMBOLS --- */}
         {(type === "AND" || type === "NAND") && <path d={PATHS.AND} />}
         {(type === "OR" || type === "NOR") && <path d={PATHS.OR} />}
         {type === "NOT" && <path d={PATHS.NOT} />}
@@ -101,8 +113,7 @@ const SchematicNode = ({ data }: NodeProps) => {
         {type === "BATTERY" && <path d={PATHS.BATTERY} strokeWidth="3" />}
         {type === "VOLTMETER" && <path d={PATHS.VOLT} />}
         {type === "GND" && <path d={PATHS.GND} />}
-
-        {/* Bubbles */}
+        {/* --- BUBBLES --- */}
         {type === "NOT" && (
           <circle
             cx={PATHS.NOT_BUBBLE.cx}
@@ -119,8 +130,7 @@ const SchematicNode = ({ data }: NodeProps) => {
             className="fill-white stroke-inherit"
           />
         )}
-
-        {/* Text Labels */}
+        {/* --- LABELS --- */}
         {type === "SWITCH" && (
           <>
             <circle cx="25" cy="15" r="3" className="fill-black stroke-none" />
