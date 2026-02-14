@@ -9,31 +9,26 @@ export const generateSchematic = (
   gateMode: 'STANDARD' | 'NAND' | 'NOR' = 'STANDARD'
 ): { nodes: Node[]; edges: Edge[] } => {
   
-  // --- 0. PRE-CALCULATE COMPLEXITY ---
   const terms = getPrimeImplicants(numInputs, outputs);
   
   // --- 1. DYNAMIC CONFIGURATION ---
-  // We calculate how much horizontal space we need based on the number of logic gates (terms).
-  // More terms = More vertical wires = Needs wider bus area.
-  const BASE_GAP = 350; // Minimum gap between Inverters and Gates
-  const GAP_PER_TERM = 25; // Extra space per AND gate
+  const BASE_GAP = 400; 
+  const GAP_PER_TERM = 50; 
   const DYNAMIC_GAP = BASE_GAP + (terms.length * GAP_PER_TERM);
 
+  const BUS_WIDTH_PER_INPUT = 90; 
   const SPACING = {
     inputsX: 100,      
     notX: 400,         
-    // Dynamic X-positions based on complexity
-    stage1X: 400 + DYNAMIC_GAP, 
-    stage2X: 400 + DYNAMIC_GAP + 400, // Fixed gap for Stage 2     
-    outputX: 400 + DYNAMIC_GAP + 700,     
+    stage1X: 400 + DYNAMIC_GAP + (numInputs * 20), 
+    stage2X: 400 + DYNAMIC_GAP + (numInputs * 20) + 400,     
+    outputX: 400 + DYNAMIC_GAP + (numInputs * 20) + 700,     
     rowHeight: 180,    
   };
 
-  // Safe Zones
   const GATE_STAGGER = SPACING.rowHeight / 2;
   const MAIN_BUS_X = (SPACING.notX + SPACING.stage1X) / 2; 
-  // STRICT LIMIT: No vertical wires allowed past this X point (60px buffer before gates)
-  const MAX_BUS_X = SPACING.stage1X - 60; 
+  const MAX_BUS_X = SPACING.stage1X - 80; 
 
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -44,10 +39,7 @@ export const generateSchematic = (
   const laneUsage = new Map<number, Array<{min: number, max: number}>>();
 
   const isLaneFree = (targetLaneX: number, y1: number, y2: number) => {
-      // 1. Check strict boundary
-      if (targetLaneX >= MAX_BUS_X) return false; // FORBIDDEN ZONE
-
-      // 2. Check collision
+      if (targetLaneX >= MAX_BUS_X) return false; 
       const start = Math.min(y1, y2);
       const end = Math.max(y1, y2);
       const laneKey = Math.round(targetLaneX);
@@ -69,10 +61,9 @@ export const generateSchematic = (
   let inputEdgeCounter = 0;
   const getCollisionFreeBusOffset = (sourceX: number, targetX: number, sourceY: number, targetY: number): [number, number] => {
     const midpointX = (sourceX + targetX) / 2;
-    const baseSpacing = 20; // 20px lanes
+    const baseSpacing = 30; 
     
-    // Try up to 200 lanes (wide search for complex graphs)
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 300; i++) {
         const multiplier = Math.ceil(i / 2);
         const sign = i % 2 === 0 ? 1 : -1;
         const spread = multiplier * baseSpacing * sign;
@@ -83,7 +74,6 @@ export const generateSchematic = (
             return [targetLaneX - midpointX, targetLaneX];
         }
     }
-    // Fallback: Stick to the edge of the safe zone if we run out of space
     return [(MAX_BUS_X - 10) - midpointX, MAX_BUS_X - 10]; 
   };
 
@@ -98,7 +88,6 @@ export const generateSchematic = (
   const createNode = (id: string, pos: { x: number; y: number }, label: string, symbolType: string, extra: any = {}): Node => ({
       id, position: pos, type: 'schematic',
       data: { label, symbolType, ...extra },
-      // Force nodes to be on top of wires (Z-Index 1001)
       style: { background: 'transparent', border: 'none', width: 60, height: 50, zIndex: 1001 },
   });
 
@@ -126,23 +115,66 @@ export const generateSchematic = (
 
   const getY = (idx: number) => idx * SPACING.rowHeight + 50;
 
-  // 1. INPUTS
+  // --- POWER RAIL ---
   const batteryId = getId();
-  nodes.push(createNode(batteryId, { x: 50, y: (numInputs * SPACING.rowHeight) / 2 }, '5V', 'BATTERY'));
+  const centerY = ((numInputs - 1) * SPACING.rowHeight) / 2 + 50;
+  nodes.push(createNode(batteryId, { x: 50, y: centerY }, '5V', 'BATTERY'));
+
+  // EXTERNAL GROUND PLACEMENT
+  const lastInputY = getY(numInputs - 1);
+  const lastGateY = terms.length > 0 ? (getY(terms.length - 1) + GATE_STAGGER) : centerY;
+  const circuitBottomY = Math.max(lastInputY, lastGateY) + 200; 
+
+  const mainGndId = getId();
+  nodes.push(createNode(mainGndId, { x: 50, y: circuitBottomY }, 'GND', 'GND'));
+
+  // Connect Battery Negative -> Ground Top
+  // This connects the Battery to the vertical stem of the T-junction
+  edges.push({
+    id: `e-bat-gnd`, source: batteryId, target: mainGndId, sourceHandle: 'bot', targetHandle: 'top',
+    type: 'step', style: { stroke: '#334155', strokeWidth: 2 }, data: { hasDot: false }
+  });
+
+  const outputNodeId = getId();
+  const voltX = terms.length === 0 ? 400 : SPACING.outputX; 
+  nodes.push(createNode(outputNodeId, { x: voltX, y: centerY }, 'Q', 'VOLTMETER', { inputCount: 1 }));
+
+  // --- RETURN WIRE ---
+  // Connects Voltmeter Bottom -> Ground Right-In
+  // This brings the wire in from the side, completing the T-junction visually
+  edges.push({
+    id: `e-return-loop`,
+    source: outputNodeId,
+    target: mainGndId,
+    sourceHandle: 'bot', 
+    targetHandle: 'right-in', 
+    type: 'step',        
+    style: { stroke: '#334155', strokeWidth: 2 },
+    data: { hasDot: false }
+  });
+
+  // --- REST OF GENERATOR LOGIC (Standard, No Changes) ---
+  if (terms.length === 0) {
+      edges.push({ id: 'gnd-out', source: mainGndId, target: outputNodeId, sourceHandle: 'top', targetHandle: 'in', type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }});
+      for (let i = 0; i < numInputs; i++) nodes.push(createNode(getId(), { x: SPACING.inputsX, y: getY(i) }, getLabel(i), 'SWITCH'));
+      return { nodes, edges };
+  }
+
+  const isAlwaysTrue = terms.length === 1 && terms[0].replace(/-/g, '') === ''; 
+  if (isAlwaysTrue) {
+      edges.push({ id: 'bat-out', source: batteryId, target: outputNodeId, sourceHandle: 'top', targetHandle: 'in', type: 'smoothstep', style: { stroke: '#ef4444', strokeWidth: 2 }});
+      for (let i = 0; i < numInputs; i++) nodes.push(createNode(getId(), { x: SPACING.inputsX, y: getY(i) }, getLabel(i), 'SWITCH'));
+      return { nodes, edges };
+  }
 
   const inputIds: string[] = [];
   for (let i = 0; i < numInputs; i++) {
     const id = getId();
     inputIds.push(id);
     nodes.push(createNode(id, { x: SPACING.inputsX, y: getY(i) }, getLabel(i), 'SWITCH'));
-    
-    edges.push({
-      id: `e-bat-${id}`, source: batteryId, target: id, sourceHandle: 'top', targetHandle: 'top',
-      type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }, data: { offset: 0, hasDot: false }
-    });
+    edges.push({ id: `e-bat-${id}`, source: batteryId, target: id, sourceHandle: 'top', targetHandle: 'top', type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }, data: { offset: 0, hasDot: false }});
   }
 
-  // 2. INVERTERS
   const inverterIds: Record<number, string> = {};
   for (let i = 0; i < numInputs; i++) {
     const isNorMulti = gateMode === 'NOR' && numInputs > 1;
@@ -153,17 +185,10 @@ export const generateSchematic = (
       inverterIds[i] = invId;
       const label = gateMode === 'STANDARD' ? 'NOT' : gateMode;
       nodes.push(createNode(invId, { x: SPACING.notX, y: getY(i) + 60 }, label, label, { inputCount: 1 }));
-      
-      edges.push({
-        id: `e-in-${i}-inv`, source: inputIds[i], target: invId, sourceHandle: 'out', targetHandle: 'in',
-        type: 'smart', 
-        data: { offset: 0, laneX: (SPACING.inputsX + SPACING.notX)/2, sourceX: SPACING.inputsX, hasDot: false }, 
-        style: { stroke: '#334155', strokeWidth: 2 }
-      });
+      edges.push({ id: `e-in-${i}-inv`, source: inputIds[i], target: invId, sourceHandle: 'out', targetHandle: 'in', type: 'smart', data: { offset: 0, laneX: (SPACING.inputsX + SPACING.notX)/2, sourceX: SPACING.inputsX, hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }});
     }
   }
 
-  // 3. GATES
   const gateIds: string[] = [];
   terms.forEach((term, idx) => {
     const connectedInputs = term.split('').filter(c => c !== '-');
@@ -181,8 +206,7 @@ export const generateSchematic = (
     const gateId = getId();
     gateIds.push(gateId);
     let label = gateMode === 'NAND' ? 'NAND' : (gateMode === 'NOR' ? 'NOR' : 'AND');
-    
-    const gateY = terms.length > 1 ? (getY(idx) + GATE_STAGGER) : ((numInputs * SPACING.rowHeight) / 2);
+    const gateY = terms.length > 1 ? (getY(idx) + GATE_STAGGER) : centerY;
     nodes.push(createNode(gateId, { x: SPACING.stage1X, y: gateY }, label, label, { inputCount }));
 
     let handleIdx = 0;
@@ -191,35 +215,13 @@ export const generateSchematic = (
       const targetBit = isNorMulti ? '1' : '0';
       const useInverter = bit === targetBit;
       const sourceId = useInverter ? inverterIds[inputIdx] : inputIds[inputIdx];
-      
       if (sourceId) {
         const srcX = useInverter ? SPACING.notX : SPACING.inputsX;
         const srcY = useInverter ? (getY(inputIdx) + 60) : getY(inputIdx); 
-
-        edges.push(createInputEdge(
-            sourceId, 
-            gateId, 
-            useInverter, 
-            'out', 
-            `in-${handleIdx}`, 
-            srcX,           
-            SPACING.stage1X,
-            srcY,
-            gateY
-        ));
+        edges.push(createInputEdge(sourceId, gateId, useInverter, 'out', `in-${handleIdx}`, srcX, SPACING.stage1X, srcY, gateY));
         handleIdx++;
       }
     });
-  });
-
-  // 4. OUTPUT
-  const outputNodeId = getId();
-  const centerY = (numInputs * SPACING.rowHeight) / 2;
-  nodes.push(createNode(outputNodeId, { x: SPACING.outputX, y: centerY }, 'Q', 'VOLTMETER', { inputCount: 1 }));
-  
-  edges.push({
-    id: `e-out-loop`, source: outputNodeId, target: batteryId, sourceHandle: 'bot', targetHandle: 'bot',
-    type: 'smoothstep', data: { offset: 0, hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }
   });
 
   if (terms.length === 1) {
@@ -234,31 +236,19 @@ export const generateSchematic = (
 
     gateIds.forEach((gId, index) => {
        const gateY = terms.length > 1 ? (getY(index) + GATE_STAGGER) : centerY; 
-       edges.push(createStageEdge(
-           gId, 
-           finalId, 
-           'out', 
-           `in-${index}`,
-           index,
-           finalGateInputs,
-           SPACING.stage1X,
-           SPACING.stage2X,
-           gateY,
-           centerY
-       ));
+       edges.push(createStageEdge(gId, finalId, 'out', `in-${index}`, index, finalGateInputs, SPACING.stage1X, SPACING.stage2X, gateY, centerY));
     });
 
     if (gateMode === 'NOR') {
         const fixerId = getId();
         nodes.push(createNode(fixerId, { x: SPACING.stage2X + 200, y: centerY }, 'NOR', 'NOR', { inputCount: 1 }));
-        edges.push({ id: 'fix-1', source: finalId, target: fixerId, sourceHandle: 'out', targetHandle: 'in-0', type: 'smoothstep', data: { hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }});
-        edges.push({ id: 'fix-2', source: fixerId, target: outputNodeId, sourceHandle: 'out', targetHandle: 'in', type: 'smoothstep', data: { hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }});
+        edges.push({ id: 'fix-1', source: finalId, target: fixerId, sourceHandle: 'out', targetHandle: 'in', type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }});
+        edges.push({ id: 'fix-2', source: fixerId, target: outputNodeId, sourceHandle: 'out', targetHandle: 'in', type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }});
     } else {
-        edges.push({ id: 'final-out', source: finalId, target: outputNodeId, sourceHandle: 'out', targetHandle: 'in', type: 'smoothstep', data: { hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }});
+        edges.push({ id: 'final-out', source: finalId, target: outputNodeId, sourceHandle: 'out', targetHandle: 'in', type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }});
     }
   }
 
-  // --- 5. DOT LOGIC ---
   const edgeGroups = new Map<string, Edge[]>();
   edges.forEach(edge => {
     if (edge.type === 'smart') {
@@ -282,7 +272,6 @@ export const generateSchematic = (
              const laneX = e.data?.laneX as number || 0;
              const srcX = e.data?.sourceX as number || 0;
              const dist = Math.abs(laneX - srcX);
-             
              if (Math.abs(dist - maxDist) > 1.0) {
                  e.data = { ...e.data, hasDot: true };
              } else {
@@ -292,7 +281,6 @@ export const generateSchematic = (
       }
   });
 
-  // --- 6. RENDER ORDER ---
   edges.sort((a, b) => {
       const getDist = (e: Edge) => {
           if (e.type !== 'smart') return 0;

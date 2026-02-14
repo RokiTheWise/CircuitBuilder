@@ -6,9 +6,17 @@ const PATHS = {
   OR: "M15,5 C25,15 25,35 15,45 C40,45 55,35 55,25 C55,15 40,5 15,5 Z",
   NOT: "M15,5 V45 L45,25 Z",
   SWITCH: "M25,0 V15 M25,15 L40,10 M25,35 V50",
-  BATTERY: "M10,10 H50 M20,40 H40 M30,10 V0 M30,40 V50",
+  BATTERY: `
+    M30,0 V15 
+    M10,15 H50 
+    M20,22 H40 
+    M10,29 H50 
+    M20,36 H40 
+    M30,36 V50
+  `,
   VOLT: "M30,5 A20,20 0 1,1 30,45 A20,20 0 1,1 30,5 Z",
-  GND: "M15,10 H45 M20,20 H40 M25,30 H35 M30,0 V10",
+  // GND: Vertical line down to plates
+  GND: "M30,0 V15 M15,15 H45 M20,25 H40 M25,35 H35",
   NOT_BUBBLE: { cx: 49, cy: 25 },
   GATE_BUBBLE: { cx: 59, cy: 25 },
 };
@@ -59,18 +67,29 @@ const SchematicNode = ({ data }: NodeProps) => {
         />
       )}
 
-      {/* 2. INPUT HANDLES */}
+      {/* 2. INPUT HANDLES (Left) */}
       {(isGate || type === "NOT" || type === "VOLTMETER") &&
         renderInputHandles()}
 
-      {/* 3. SVG GRAPHICS */}
+      {/* 3. SPECIAL GND HANDLE (Right) - For Parallel Return Path */}
+      {/* Moved to top-right corner to align with the bus wire */}
+      {type === "GND" && (
+        <Handle
+          type="target"
+          position={Position.Right}
+          id="right-in"
+          style={{ opacity: 0, right: 0, top: 0 }}
+        />
+      )}
+
+      {/* 4. SVG GRAPHICS */}
       <svg
         width="60"
         height="50"
         viewBox="0 0 60 50"
         className="stroke-slate-900 stroke-2 fill-white overflow-visible"
       >
-        {/* --- INPUT LEADS (Left side) --- */}
+        {/* --- LEADS --- */}
         {isMultiInput
           ? Array.from({ length: inputCount }).map((_, i) => {
               const yPos = 50 * ((i + 1) / (inputCount + 1));
@@ -86,8 +105,7 @@ const SchematicNode = ({ data }: NodeProps) => {
           : (type === "NOT" || isGate) && (
               <path d="M0,25 H15" strokeWidth="2" fill="none" />
             )}
-        {/* --- OUTPUT LEADS (Right side) --- */}
-        {/* Connect the symbol to the Right Handle (x=60) */}
+
         {type === "SWITCH" && (
           <path
             d="M25,15 H60"
@@ -96,8 +114,7 @@ const SchematicNode = ({ data }: NodeProps) => {
             strokeDasharray="2,2"
             className="stroke-slate-300"
           />
-        )}{" "}
-        {/* Pivot line */}
+        )}
         {(type === "AND" || type === "NAND") && (
           <path d="M35,25 H60" strokeWidth="2" fill="none" />
         )}
@@ -105,14 +122,32 @@ const SchematicNode = ({ data }: NodeProps) => {
         {(type === "OR" || type === "NOR") && (
           <path d="M55,25 H60" strokeWidth="2" fill="none" />
         )}
+
         {/* --- SYMBOLS --- */}
         {(type === "AND" || type === "NAND") && <path d={PATHS.AND} />}
         {(type === "OR" || type === "NOR") && <path d={PATHS.OR} />}
         {type === "NOT" && <path d={PATHS.NOT} />}
         {type === "SWITCH" && <path d={PATHS.SWITCH} fill="none" />}
-        {type === "BATTERY" && <path d={PATHS.BATTERY} strokeWidth="3" />}
+        {type === "BATTERY" && <path d={PATHS.BATTERY} strokeWidth="2" />}
         {type === "VOLTMETER" && <path d={PATHS.VOLT} />}
         {type === "GND" && <path d={PATHS.GND} />}
+
+        {/* --- SPECIAL: GND PARALLEL WIRE --- */}
+        {/* Draws a T-Junction inside the component to connect Right Handle to Center Stem */}
+        {type === "GND" && (
+          <>
+            {/* Horizontal wire from Right Edge (60,0) to Center (30,0) */}
+            <path d="M60,0 L30,0" strokeWidth="2" fill="none" />
+            {/* Solder Dot at the T-Junction */}
+            <circle
+              cx="30"
+              cy="0"
+              r="3"
+              className="fill-slate-900 stroke-none"
+            />
+          </>
+        )}
+
         {/* --- BUBBLES --- */}
         {type === "NOT" && (
           <circle
@@ -130,6 +165,7 @@ const SchematicNode = ({ data }: NodeProps) => {
             className="fill-white stroke-inherit"
           />
         )}
+
         {/* --- LABELS --- */}
         {type === "SWITCH" && (
           <>
@@ -146,14 +182,24 @@ const SchematicNode = ({ data }: NodeProps) => {
           </>
         )}
         {type === "BATTERY" && (
-          <text
-            x="-25"
-            y="25"
-            fontSize="12"
-            className="fill-slate-500 stroke-none"
-          >
-            5V
-          </text>
+          <>
+            <text
+              x="-15"
+              y="15"
+              fontSize="14"
+              className="fill-red-500 stroke-none font-bold"
+            >
+              +
+            </text>
+            <text
+              x="-15"
+              y="45"
+              fontSize="14"
+              className="fill-slate-700 stroke-none font-bold"
+            >
+              -
+            </text>
+          </>
         )}
         {type === "VOLTMETER" && (
           <text
@@ -169,7 +215,7 @@ const SchematicNode = ({ data }: NodeProps) => {
         )}
       </svg>
 
-      {/* 4. OUTPUT HANDLES */}
+      {/* 5. OUTPUT HANDLES */}
       {(type === "BATTERY" || type === "VOLTMETER") && (
         <Handle
           type="source"
