@@ -10,7 +10,8 @@ export const generateSchematic = (
 ): { nodes: Node[]; edges: Edge[] } => {
   
   // --- CONFIGURATION ---
-  const BUS_WIDTH_PER_INPUT = 80; // Increased to give more room for lanes
+  // Increased width to give the bus room to spread out
+  const BUS_WIDTH_PER_INPUT = 90; 
   const SPACING = {
     inputsX: 100,      
     notX: 400,         
@@ -20,6 +21,7 @@ export const generateSchematic = (
     rowHeight: 180,    
   };
 
+  const GATE_STAGGER = SPACING.rowHeight / 2;
   const MAIN_BUS_X = (SPACING.notX + SPACING.stage1X) / 2; 
 
   const nodes: Node[] = [];
@@ -27,70 +29,56 @@ export const generateSchematic = (
   let nodeId = 1;
   const getId = () => `sch-${nodeId++}`; 
 
-  // --- COLLISION-AWARE LANE MANAGER ---
-  // Tracks usage of vertical lanes.
-  // Map<LaneOffset, Array<{minY, maxY}>>
+  // --- COLLISION MANAGER ---
   const laneUsage = new Map<number, Array<{min: number, max: number}>>();
 
-  const isLaneFree = (offset: number, y1: number, y2: number) => {
+  const isLaneFree = (targetLaneX: number, y1: number, y2: number) => {
       const start = Math.min(y1, y2);
       const end = Math.max(y1, y2);
-      const intervals = laneUsage.get(offset) || [];
-      
-      // Check for overlap with any existing wire in this lane
+      const laneKey = Math.round(targetLaneX);
+      const intervals = laneUsage.get(laneKey) || [];
       for (const iv of intervals) {
-          // Overlap condition: not (end < iv.min or start > iv.max)
-          // add a small buffer (5px) to prevent touching ends from colliding
-          if (start < iv.max - 5 && end > iv.min + 5) {
-              return false; // Occupied
-          }
+          if (start < iv.max + 5 && end > iv.min - 5) return false;
       }
-      return true; // Free
+      return true;
   };
 
-  const reserveLane = (offset: number, y1: number, y2: number) => {
+  const reserveLane = (targetLaneX: number, y1: number, y2: number) => {
       const start = Math.min(y1, y2);
       const end = Math.max(y1, y2);
-      if (!laneUsage.has(offset)) laneUsage.set(offset, []);
-      laneUsage.get(offset)!.push({ min: start, max: end });
+      const laneKey = Math.round(targetLaneX);
+      if (!laneUsage.has(laneKey)) laneUsage.set(laneKey, []);
+      laneUsage.get(laneKey)!.push({ min: start, max: end });
   };
 
+  let inputEdgeCounter = 0;
   const getCollisionFreeBusOffset = (sourceX: number, targetX: number, sourceY: number, targetY: number): [number, number] => {
     const midpointX = (sourceX + targetX) / 2;
-    const baseSpacing = 15;
     
-    // Attempt lanes in an expanding spiral: 0, 15, -15, 30, -30, etc.
-    // We try up to 20 lanes to find a free spot.
-    for (let i = 0; i < 50; i++) {
+    // CHANGE: Increased spacing from 20 to 40.
+    // This forces the vertical wires to spread out into the "dead space"
+    // making the schematic look less dense and more legible.
+    const baseSpacing = 40; 
+    
+    for (let i = 0; i < 100; i++) {
         const multiplier = Math.ceil(i / 2);
         const sign = i % 2 === 0 ? 1 : -1;
         const spread = multiplier * baseSpacing * sign;
-        
-        // Calculate the absolute X position of this candidate lane
         const targetLaneX = MAIN_BUS_X + spread;
-        const candidateOffset = targetLaneX - midpointX;
-
-        // Check if this specific vertical segment is free
+        
         if (isLaneFree(targetLaneX, sourceY, targetY)) {
             reserveLane(targetLaneX, sourceY, targetY);
-            return [candidateOffset, targetLaneX];
+            return [targetLaneX - midpointX, targetLaneX];
         }
     }
-    
-    // Fallback: Just return the last tried lane if everything is full (rare)
     return [0, MAIN_BUS_X]; 
   };
 
-  // For Stage 2, we stick to the index-based fan-out because overlapping is allowed/expected at the pin entry,
-  // but we can apply simple lane logic if needed. For now, the index logic works well for fan-in.
   const calculateStageOffset = (sourceX: number, targetX: number, targetIndex: number, totalInputs: number): [number, number] => {
       const spacing = 15;
       const start = -((totalInputs - 1) * spacing) / 2; 
       const spread = start + (targetIndex * spacing);
-      const midpoint = (sourceX + targetX) / 2;
-      const offset = spread;
-      const laneX = midpoint + offset;
-      return [offset, laneX];
+      return [spread, (sourceX + targetX) / 2 + spread];
   };
 
   // --- FACTORIES ---
@@ -101,9 +89,7 @@ export const generateSchematic = (
   });
 
   const createInputEdge = (source: string, target: string, isInv: boolean, sourceHandle: string, targetHandle: string, sourceX: number, targetX: number, sourceY: number, targetY: number): Edge => {
-      // USE NEW COLLISION LOGIC
       const [offset, laneX] = getCollisionFreeBusOffset(sourceX, targetX, sourceY, targetY);
-      
       return {
           id: `e-in-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`,
           source, target, sourceHandle, targetHandle,
@@ -129,15 +115,13 @@ export const generateSchematic = (
 
   // 1. BATTERY & SWITCHES
   const batteryId = getId();
-  const centerY = ((numInputs - 1) * SPACING.rowHeight) / 2 + 50;
-  nodes.push(createNode(batteryId, { x: 50, y: centerY }, '5V', 'BATTERY'));
+  nodes.push(createNode(batteryId, { x: 50, y: (numInputs * SPACING.rowHeight) / 2 }, '5V', 'BATTERY'));
 
   const inputIds: string[] = [];
   for (let i = 0; i < numInputs; i++) {
     const id = getId();
     inputIds.push(id);
-    const yPos = getY(i);
-    nodes.push(createNode(id, { x: SPACING.inputsX, y: yPos }, getLabel(i), 'SWITCH'));
+    nodes.push(createNode(id, { x: SPACING.inputsX, y: getY(i) }, getLabel(i), 'SWITCH'));
     
     edges.push({
       id: `e-bat-${id}`, source: batteryId, target: id, sourceHandle: 'top', targetHandle: 'top',
@@ -155,8 +139,7 @@ export const generateSchematic = (
       const invId = getId();
       inverterIds[i] = invId;
       const label = gateMode === 'STANDARD' ? 'NOT' : gateMode;
-      const invY = getY(i) + 60;
-      nodes.push(createNode(invId, { x: SPACING.notX, y: invY }, label, label, { inputCount: 1 }));
+      nodes.push(createNode(invId, { x: SPACING.notX, y: getY(i) + 60 }, label, label, { inputCount: 1 }));
       
       edges.push({
         id: `e-in-${i}-inv`, source: inputIds[i], target: invId, sourceHandle: 'out', targetHandle: 'in',
@@ -185,7 +168,8 @@ export const generateSchematic = (
     const gateId = getId();
     gateIds.push(gateId);
     let label = gateMode === 'NAND' ? 'NAND' : (gateMode === 'NOR' ? 'NOR' : 'AND');
-    const gateY = terms.length > 1 ? getY(idx) : centerY;
+    
+    const gateY = terms.length > 1 ? (getY(idx) + GATE_STAGGER) : ((numInputs * SPACING.rowHeight) / 2);
     nodes.push(createNode(gateId, { x: SPACING.stage1X, y: gateY }, label, label, { inputCount }));
 
     let handleIdx = 0;
@@ -199,7 +183,6 @@ export const generateSchematic = (
         const srcX = useInverter ? SPACING.notX : SPACING.inputsX;
         const srcY = useInverter ? (getY(inputIdx) + 60) : getY(inputIdx); 
 
-        // IMPORTANT: Call createInputEdge which now uses collision logic
         edges.push(createInputEdge(
             sourceId, 
             gateId, 
@@ -218,7 +201,9 @@ export const generateSchematic = (
 
   // 4. OUTPUT
   const outputNodeId = getId();
+  const centerY = (numInputs * SPACING.rowHeight) / 2;
   nodes.push(createNode(outputNodeId, { x: SPACING.outputX, y: centerY }, 'Q', 'VOLTMETER', { inputCount: 1 }));
+  
   edges.push({
     id: `e-out-loop`, source: outputNodeId, target: batteryId, sourceHandle: 'bot', targetHandle: 'bot',
     type: 'smoothstep', data: { offset: 0, hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }
@@ -226,7 +211,7 @@ export const generateSchematic = (
 
   if (terms.length === 1) {
     const termId = gateIds[0];
-    const gateY = terms.length > 1 ? getY(0) : centerY;
+    const gateY = terms.length > 1 ? (getY(0) + GATE_STAGGER) : centerY;
     edges.push(createStageEdge(termId, outputNodeId, 'out', 'in', 0, 1, SPACING.stage1X, SPACING.outputX, gateY, centerY));
   } else {
     const finalId = getId();
@@ -235,7 +220,7 @@ export const generateSchematic = (
     nodes.push(createNode(finalId, { x: SPACING.stage2X, y: centerY }, label, label, { inputCount: finalGateInputs }));
 
     gateIds.forEach((gId, index) => {
-       const gateY = terms.length > 1 ? getY(index) : centerY; 
+       const gateY = terms.length > 1 ? (getY(index) + GATE_STAGGER) : centerY; 
        edges.push(createStageEdge(
            gId, 
            finalId, 
@@ -295,9 +280,11 @@ export const generateSchematic = (
 
   // --- 6. RENDER ORDER ---
   edges.sort((a, b) => {
-      const distA = Math.abs((a.data?.laneX as number || 0) - (a.data?.sourceX as number || 0));
-      const distB = Math.abs((b.data?.laneX as number || 0) - (b.data?.sourceX as number || 0));
-      return distB - distA; 
+      const getDist = (e: Edge) => {
+          if (e.type !== 'smart') return 0;
+          return Math.abs((e.data?.laneX as number || 0) - (e.data?.sourceX as number || 0));
+      };
+      return getDist(b) - getDist(a); 
   });
 
   return { nodes, edges };

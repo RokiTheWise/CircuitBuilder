@@ -22,7 +22,8 @@ import StaggeredDropDown from "@/components/StaggeredDropdown";
 
 // 2. IMPORT CUSTOM NODES & EDGES
 import SchematicNode from "@/components/SchematicNode";
-import SmartStepEdge from "@/components/SmartStepEdge"; // <--- NEW IMPORT
+// REMOVED: JunctionNode import
+import SmartStepEdge from "@/components/SmartStepEdge";
 
 export type GateMode = "STANDARD" | "NAND" | "NOR";
 export type DisplayStyle = "BLOCK" | "SCHEMATIC";
@@ -48,10 +49,10 @@ export default function LogicLens() {
     [],
   );
 
-  // 4. REGISTER EDGE TYPES (NEW)
+  // 4. REGISTER EDGE TYPES
   const edgeTypes = useMemo(
     () => ({
-      smart: SmartStepEdge, // <--- Connects 'type: smart' to your custom component
+      smart: SmartStepEdge,
     }),
     [],
   );
@@ -60,7 +61,6 @@ export default function LogicLens() {
   useEffect(() => {
     let result;
 
-    // Choose generator based on display style
     if (displayStyle === "SCHEMATIC") {
       result = generateSchematic(numInputs, tableOutputs, gateMode);
     } else {
@@ -77,7 +77,7 @@ export default function LogicLens() {
     }
   }, [numInputs, tableOutputs, gateMode, displayStyle, isTyping]);
 
-  // ... (Rest of your component logic remains unchanged) ...
+  // ... (Rest of handlers remain the same) ...
   const handleEquationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setEquation(val);
@@ -298,7 +298,7 @@ export default function LogicLens() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes} // <--- PASS EDGES HERE
+          edgeTypes={edgeTypes}
           colorMode="light"
           fitView
           minZoom={0.1}

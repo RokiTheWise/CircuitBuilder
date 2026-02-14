@@ -13,10 +13,9 @@ export default function SmartStepEdge({
   data,
 }: EdgeProps) {
   const offset = (data?.offset as number) || 0;
+  const showDot = data?.hasDot as boolean; // Read the flag
 
-  // FIX: Read 'hasDot' instead of 'isBranching' to match the generator
-  const showDot = data?.hasDot as boolean;
-
+  // Calculate the vertical lane
   const centerX = (sourceX + targetX) / 2 + offset;
 
   const [edgePath] = getSmoothStepPath({
@@ -26,7 +25,7 @@ export default function SmartStepEdge({
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 0, // Keep sharp corners for precision
+    borderRadius: 0, // Sharp corners
     centerX,
   });
 
@@ -47,14 +46,14 @@ export default function SmartStepEdge({
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
 
       {/* 3. JUNCTION DOT 
-          Only renders if 'hasDot' is true (calculated by generator).
-          Places a solder dot exactly at the T-junction corner.
+          - Drawn on TOP of the wire
+          - Uses the wire's color (red for selected, slate for normal)
       */}
       {showDot && (
         <circle
           cx={centerX}
           cy={sourceY}
-          r={3.5}
+          r={4}
           fill={strokeColor}
           stroke="none"
         />
