@@ -5,7 +5,16 @@ const PATHS = {
   AND: "M15,5 V45 H35 A20,20 0 0,0 35,5 Z",
   OR: "M15,5 C25,15 25,35 15,45 C40,45 55,35 55,25 C55,15 40,5 15,5 Z",
   NOT: "M15,5 V45 L45,25 Z",
-  SWITCH: "M25,0 V15 M25,15 L40,10 M25,35 V50",
+
+  // === TRIANGLE SPDT SWITCH (Black Outline) ===
+  // Lever connects Left (VCC) to TopRight (Out) by default
+  SWITCH_LEVER: "M20,25 L45,15",
+
+  // Internal Routing Lines
+  SWITCH_VCC_WIRE: "M0,25 L20,25", // Left Handle -> Left Vertex
+  SWITCH_OUT_WIRE: "M45,15 L60,25", // TopRight Vertex -> Right Handle
+  SWITCH_GND_WIRE: "M45,35 V50", // BotRight Vertex -> Bottom Handle
+
   BATTERY: `
     M30,0 V15 
     M10,15 H50 
@@ -15,7 +24,6 @@ const PATHS = {
     M30,36 V50
   `,
   VOLT: "M30,5 A20,20 0 1,1 30,45 A20,20 0 1,1 30,5 Z",
-  // GND: Vertical line down to plates
   GND: "M30,0 V15 M15,15 H45 M20,25 H40 M25,35 H35",
   NOT_BUBBLE: { cx: 49, cy: 25 },
   GATE_BUBBLE: { cx: 59, cy: 25 },
@@ -29,7 +37,7 @@ const SchematicNode = ({ data }: NodeProps) => {
   const isGate = ["AND", "NAND", "OR", "NOR", "XOR"].includes(type);
   const isMultiInput = isGate && inputCount > 1;
 
-  // --- Dynamic Input Handles ---
+  // --- Dynamic Input Handles (for Gates) ---
   const renderInputHandles = () => {
     if (!isMultiInput) {
       return (
@@ -57,8 +65,45 @@ const SchematicNode = ({ data }: NodeProps) => {
 
   return (
     <div className="relative group w-[60px] h-[50px] flex items-center justify-center">
-      {/* 1. TOP HANDLE */}
-      {(type === "SWITCH" || type === "GND" || type === "BATTERY") && (
+      {/* === SWITCH HANDLES === */}
+      {type === "SWITCH" && (
+        <>
+          {/* VCC Input (Left) */}
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="vcc"
+            style={{ opacity: 0, left: 0, top: "50%" }}
+          />
+          {/* Ground Output (Bottom) */}
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="gnd"
+            style={{ opacity: 0, bottom: 0, left: "75%" }}
+          />
+          {/* Logic Output (Right) */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="out"
+            style={{ opacity: 0, right: 0, top: "50%" }}
+          />
+        </>
+      )}
+
+      {/* === BATTERY POSITIVE (Source) === */}
+      {type === "BATTERY" && (
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top"
+          style={{ opacity: 0, top: 0 }}
+        />
+      )}
+
+      {/* === GND INPUT (Target) === */}
+      {type === "GND" && (
         <Handle
           type="target"
           position={Position.Top}
@@ -67,12 +112,11 @@ const SchematicNode = ({ data }: NodeProps) => {
         />
       )}
 
-      {/* 2. INPUT HANDLES (Left) */}
+      {/* Standard Input Handles (Gates/Voltmeter) */}
       {(isGate || type === "NOT" || type === "VOLTMETER") &&
         renderInputHandles()}
 
-      {/* 3. SPECIAL GND HANDLE (Right) - For Parallel Return Path */}
-      {/* Moved to top-right corner to align with the bus wire */}
+      {/* Standard Right Handle (GND Side Entry) */}
       {type === "GND" && (
         <Handle
           type="target"
@@ -106,15 +150,6 @@ const SchematicNode = ({ data }: NodeProps) => {
               <path d="M0,25 H15" strokeWidth="2" fill="none" />
             )}
 
-        {type === "SWITCH" && (
-          <path
-            d="M25,15 H60"
-            strokeWidth="2"
-            fill="none"
-            strokeDasharray="2,2"
-            className="stroke-slate-300"
-          />
-        )}
         {(type === "AND" || type === "NAND") && (
           <path d="M35,25 H60" strokeWidth="2" fill="none" />
         )}
@@ -127,18 +162,52 @@ const SchematicNode = ({ data }: NodeProps) => {
         {(type === "AND" || type === "NAND") && <path d={PATHS.AND} />}
         {(type === "OR" || type === "NOR") && <path d={PATHS.OR} />}
         {type === "NOT" && <path d={PATHS.NOT} />}
-        {type === "SWITCH" && <path d={PATHS.SWITCH} fill="none" />}
+
+        {/* === TRIANGLE SWITCH (All Black) === */}
+        {type === "SWITCH" && (
+          <>
+            {/* Internal Wires */}
+            <path d={PATHS.SWITCH_VCC_WIRE} strokeWidth="2" fill="none" />
+            <path d={PATHS.SWITCH_OUT_WIRE} strokeWidth="2" fill="none" />
+            <path d={PATHS.SWITCH_GND_WIRE} strokeWidth="2" fill="none" />
+
+            {/* The 3 Dots (Contacts) */}
+            <circle
+              cx="20"
+              cy="25"
+              r="3"
+              className="fill-white stroke-slate-900 stroke-2"
+            />
+            <circle
+              cx="45"
+              cy="15"
+              r="3"
+              className="fill-white stroke-slate-900 stroke-2"
+            />
+            <circle
+              cx="45"
+              cy="35"
+              r="3"
+              className="fill-white stroke-slate-900 stroke-2"
+            />
+
+            {/* The Lever */}
+            <path
+              d={PATHS.SWITCH_LEVER}
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          </>
+        )}
+
         {type === "BATTERY" && <path d={PATHS.BATTERY} strokeWidth="2" />}
         {type === "VOLTMETER" && <path d={PATHS.VOLT} />}
         {type === "GND" && <path d={PATHS.GND} />}
 
-        {/* --- SPECIAL: GND PARALLEL WIRE --- */}
-        {/* Draws a T-Junction inside the component to connect Right Handle to Center Stem */}
+        {/* GND Parallel Line (T-Junction visual) */}
         {type === "GND" && (
           <>
-            {/* Horizontal wire from Right Edge (60,0) to Center (30,0) */}
             <path d="M60,0 L30,0" strokeWidth="2" fill="none" />
-            {/* Solder Dot at the T-Junction */}
             <circle
               cx="30"
               cy="0"
@@ -168,18 +237,15 @@ const SchematicNode = ({ data }: NodeProps) => {
 
         {/* --- LABELS --- */}
         {type === "SWITCH" && (
-          <>
-            <circle cx="25" cy="15" r="3" className="fill-black stroke-none" />
-            <text
-              x="-15"
-              y="30"
-              fontSize="12"
-              fontWeight="bold"
-              className="fill-slate-600 stroke-none"
-            >
-              {label}
-            </text>
-          </>
+          <text
+            x="-15"
+            y="30"
+            fontSize="14"
+            fontWeight="bold"
+            className="fill-slate-600 stroke-none"
+          >
+            {label}
+          </text>
         )}
         {type === "BATTERY" && (
           <>
@@ -215,7 +281,7 @@ const SchematicNode = ({ data }: NodeProps) => {
         )}
       </svg>
 
-      {/* 5. OUTPUT HANDLES */}
+      {/* Standard Bottom Handle */}
       {(type === "BATTERY" || type === "VOLTMETER") && (
         <Handle
           type="source"
@@ -224,7 +290,9 @@ const SchematicNode = ({ data }: NodeProps) => {
           style={{ opacity: 0, bottom: 0 }}
         />
       )}
-      {type !== "BATTERY" && type !== "VOLTMETER" && type !== "GND" && (
+
+      {/* Standard Output Handle */}
+      {(isGate || type === "NOT") && (
         <Handle
           type="source"
           position={Position.Right}
