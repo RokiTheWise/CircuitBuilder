@@ -197,10 +197,11 @@ const SchematicNode = ({ data }: NodeProps) => {
           />
         )}
 
+        {/* SWITCH LABEL - Adjusted y from 30 to 20 to clear the wire */}
         {type === "SWITCH" && (
           <text
             x="-15"
-            y="30"
+            y="20"
             fontSize="14"
             fontWeight="bold"
             className="fill-slate-600 stroke-none"
