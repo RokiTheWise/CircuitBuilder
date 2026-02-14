@@ -9,30 +9,45 @@ export const generateSchematic = (
   gateMode: 'STANDARD' | 'NAND' | 'NOR' = 'STANDARD'
 ): { nodes: Node[]; edges: Edge[] } => {
   
-  // --- CONFIGURATION ---
-  // Increased width to give the bus room to spread out
-  const BUS_WIDTH_PER_INPUT = 90; 
+  // --- 0. PRE-CALCULATE COMPLEXITY ---
+  const terms = getPrimeImplicants(numInputs, outputs);
+  
+  // --- 1. DYNAMIC CONFIGURATION ---
+  // We calculate how much horizontal space we need based on the number of logic gates (terms).
+  // More terms = More vertical wires = Needs wider bus area.
+  const BASE_GAP = 350; // Minimum gap between Inverters and Gates
+  const GAP_PER_TERM = 25; // Extra space per AND gate
+  const DYNAMIC_GAP = BASE_GAP + (terms.length * GAP_PER_TERM);
+
   const SPACING = {
     inputsX: 100,      
     notX: 400,         
-    stage1X: 600 + (numInputs * BUS_WIDTH_PER_INPUT), 
-    stage2X: 1000 + (numInputs * BUS_WIDTH_PER_INPUT),     
-    outputX: 1300 + (numInputs * BUS_WIDTH_PER_INPUT),     
+    // Dynamic X-positions based on complexity
+    stage1X: 400 + DYNAMIC_GAP, 
+    stage2X: 400 + DYNAMIC_GAP + 400, // Fixed gap for Stage 2     
+    outputX: 400 + DYNAMIC_GAP + 700,     
     rowHeight: 180,    
   };
 
+  // Safe Zones
   const GATE_STAGGER = SPACING.rowHeight / 2;
   const MAIN_BUS_X = (SPACING.notX + SPACING.stage1X) / 2; 
+  // STRICT LIMIT: No vertical wires allowed past this X point (60px buffer before gates)
+  const MAX_BUS_X = SPACING.stage1X - 60; 
 
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   let nodeId = 1;
   const getId = () => `sch-${nodeId++}`; 
 
-  // --- COLLISION MANAGER ---
+  // --- 2. COLLISION MANAGER ---
   const laneUsage = new Map<number, Array<{min: number, max: number}>>();
 
   const isLaneFree = (targetLaneX: number, y1: number, y2: number) => {
+      // 1. Check strict boundary
+      if (targetLaneX >= MAX_BUS_X) return false; // FORBIDDEN ZONE
+
+      // 2. Check collision
       const start = Math.min(y1, y2);
       const end = Math.max(y1, y2);
       const laneKey = Math.round(targetLaneX);
@@ -54,13 +69,10 @@ export const generateSchematic = (
   let inputEdgeCounter = 0;
   const getCollisionFreeBusOffset = (sourceX: number, targetX: number, sourceY: number, targetY: number): [number, number] => {
     const midpointX = (sourceX + targetX) / 2;
+    const baseSpacing = 20; // 20px lanes
     
-    // CHANGE: Increased spacing from 20 to 40.
-    // This forces the vertical wires to spread out into the "dead space"
-    // making the schematic look less dense and more legible.
-    const baseSpacing = 40; 
-    
-    for (let i = 0; i < 100; i++) {
+    // Try up to 200 lanes (wide search for complex graphs)
+    for (let i = 0; i < 200; i++) {
         const multiplier = Math.ceil(i / 2);
         const sign = i % 2 === 0 ? 1 : -1;
         const spread = multiplier * baseSpacing * sign;
@@ -71,7 +83,8 @@ export const generateSchematic = (
             return [targetLaneX - midpointX, targetLaneX];
         }
     }
-    return [0, MAIN_BUS_X]; 
+    // Fallback: Stick to the edge of the safe zone if we run out of space
+    return [(MAX_BUS_X - 10) - midpointX, MAX_BUS_X - 10]; 
   };
 
   const calculateStageOffset = (sourceX: number, targetX: number, targetIndex: number, totalInputs: number): [number, number] => {
@@ -85,7 +98,8 @@ export const generateSchematic = (
   const createNode = (id: string, pos: { x: number; y: number }, label: string, symbolType: string, extra: any = {}): Node => ({
       id, position: pos, type: 'schematic',
       data: { label, symbolType, ...extra },
-      style: { background: 'transparent', border: 'none', width: 60, height: 50 },
+      // Force nodes to be on top of wires (Z-Index 1001)
+      style: { background: 'transparent', border: 'none', width: 60, height: 50, zIndex: 1001 },
   });
 
   const createInputEdge = (source: string, target: string, isInv: boolean, sourceHandle: string, targetHandle: string, sourceX: number, targetX: number, sourceY: number, targetY: number): Edge => {
@@ -94,7 +108,7 @@ export const generateSchematic = (
           id: `e-in-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`,
           source, target, sourceHandle, targetHandle,
           type: 'smart', 
-          data: { offset, laneX, sourceX, hasDot: false }, 
+          data: { offset, laneX, sourceX, sourceY, hasDot: false }, 
           style: { stroke: isInv ? '#ef4444' : '#334155', strokeWidth: 2 },
       };
   };
@@ -111,9 +125,8 @@ export const generateSchematic = (
   };
 
   const getY = (idx: number) => idx * SPACING.rowHeight + 50;
-  const terms = getPrimeImplicants(numInputs, outputs);
 
-  // 1. BATTERY & SWITCHES
+  // 1. INPUTS
   const batteryId = getId();
   nodes.push(createNode(batteryId, { x: 50, y: (numInputs * SPACING.rowHeight) / 2 }, '5V', 'BATTERY'));
 
@@ -269,6 +282,7 @@ export const generateSchematic = (
              const laneX = e.data?.laneX as number || 0;
              const srcX = e.data?.sourceX as number || 0;
              const dist = Math.abs(laneX - srcX);
+             
              if (Math.abs(dist - maxDist) > 1.0) {
                  e.data = { ...e.data, hasDot: true };
              } else {
