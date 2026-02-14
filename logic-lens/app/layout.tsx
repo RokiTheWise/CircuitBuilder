@@ -43,6 +43,11 @@ export const metadata: Metadata = {
     "equation to logic gates",
     "logic circuit simulator",
     "truth table generator",
+    "truth table to logic diagram",
+    "boolean simplification tool",
+    "interactive logic circuit builder",
+    "online logic gate simulator",
+    "digital circuit design tool",
 
     // Use Case / Audience
     "computer science tool",
@@ -50,6 +55,7 @@ export const metadata: Metadata = {
     "circuit solver",
     "logic gate visualizer",
     "interactive circuit diagram",
+    "online schematic builder",
   ],
   authors: [{ name: "Dexter Jethro Enriquez", url: "https://djenriquez.dev" }],
   creator: "Dexter Jethro Enriquez",
@@ -89,7 +95,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="scroll-smooth">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50`}
       >
