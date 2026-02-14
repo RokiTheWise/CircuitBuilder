@@ -5,7 +5,7 @@ import {
   FiTable,
   FiZap,
   FiLayout,
-  FiCode,
+  FiCompass, // Added for the Routing Section
 } from "react-icons/fi";
 
 export default function HowItWorks() {
@@ -174,7 +174,7 @@ export default function HowItWorks() {
           <div className="flex items-center gap-3 mb-6 text-emerald-600">
             <FiTable className="text-3xl" />
             <h3 className="text-2xl font-black uppercase tracking-tight">
-              03. TWO-WAY BINDING
+              03. Two-Way Binding
             </h3>
           </div>
           <p className="text-slate-600 mb-8 leading-relaxed">
@@ -237,6 +237,70 @@ export default function HowItWorks() {
                 Uses the <strong>OR-AND</strong> dual form, optimized via shared
                 inverters to minimize total gate count.
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 05. SCHEMATIC ROUTING (NEW) */}
+        <section className="mb-20">
+          <div className="flex items-center gap-3 mb-6 text-rose-600">
+            <FiCompass className="text-3xl" />
+            <h3 className="text-2xl font-black uppercase tracking-tight">
+              05. Schematic Routing Engine
+            </h3>
+          </div>
+          <div className="grid lg:grid-cols-2 gap-10 items-start">
+            <div className="text-slate-600 space-y-4">
+              <p>
+                Unlike standard graphing libraries that use shortest-path
+                curves, LogiSketch implements a custom{" "}
+                <strong>Trunk-Logic Router</strong>.
+              </p>
+              <p>
+                This system mimics professional engineering schematics by
+                forcing dedicated vertical "buses" for power and ground rails,
+                preventing the "spaghetti code" visual common in auto-generated
+                graphs.
+              </p>
+              <div className="p-4 bg-rose-50 rounded-xl border border-rose-100 mt-4">
+                <h4 className="font-bold text-rose-900 mb-2 text-xs uppercase">
+                  Routing Strategy
+                </h4>
+                <ul className="space-y-2 list-none pl-0 text-sm text-rose-800 font-mono">
+                  <li>
+                    <span className="font-bold">POWER_LANE_X</span> = 100px
+                  </li>
+                  <li>
+                    <span className="font-bold">GND_LANE_X</span> = 160px
+                  </li>
+                  <li>
+                    <span className="font-bold">INPUTS_X</span> = 240px
+                  </li>
+                </ul>
+                <p className="mt-3 text-xs text-rose-600">
+                  *Wires adhere strictly to these coordinates to form clean,
+                  readable trunks.
+                </p>
+              </div>
+            </div>
+            <div className="bg-slate-900 rounded-xl p-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-2 opacity-20">
+                <FiLayout className="text-6xl text-white" />
+              </div>
+              <pre className="text-[11px] font-mono text-rose-300 leading-relaxed z-10 relative">
+                {`// Force vertical alignment
+const centerX = laneX !== undefined 
+  ? laneX 
+  : (sourceX + targetX) / 2;
+
+// Draw path with sharp corners
+const [edgePath] = getSmoothStepPath({
+  sourceX, sourceY,
+  targetX, targetY,
+  borderRadius: 0, 
+  centerX, 
+});`}
+              </pre>
             </div>
           </div>
         </section>
