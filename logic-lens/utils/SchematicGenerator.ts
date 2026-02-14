@@ -10,7 +10,7 @@ export const generateSchematic = (
 ): { nodes: Node[]; edges: Edge[] } => {
   
   // --- CONFIGURATION ---
-  const BUS_WIDTH_PER_INPUT = 60; 
+  const BUS_WIDTH_PER_INPUT = 80; // Increased to give more room for lanes
   const SPACING = {
     inputsX: 100,      
     notX: 400,         
@@ -27,21 +27,62 @@ export const generateSchematic = (
   let nodeId = 1;
   const getId = () => `sch-${nodeId++}`; 
 
-  // --- SMART OFFSET HELPERS ---
-  let inputEdgeCounter = 0;
-  
-  // Returns [offset, absoluteLaneX]
-  const calculateBusOffset = (sourceX: number, targetX: number): [number, number] => {
-    const count = inputEdgeCounter++;
-    const base = 25; 
-    const multiplier = Math.ceil(count / 2);
-    const sign = count % 2 === 0 ? 1 : -1;
-    const spread = multiplier * base * sign;
-    const targetLane = MAIN_BUS_X + spread;
-    const offset = targetLane - (sourceX + targetX) / 2;
-    return [offset, targetLane];
+  // --- COLLISION-AWARE LANE MANAGER ---
+  // Tracks usage of vertical lanes.
+  // Map<LaneOffset, Array<{minY, maxY}>>
+  const laneUsage = new Map<number, Array<{min: number, max: number}>>();
+
+  const isLaneFree = (offset: number, y1: number, y2: number) => {
+      const start = Math.min(y1, y2);
+      const end = Math.max(y1, y2);
+      const intervals = laneUsage.get(offset) || [];
+      
+      // Check for overlap with any existing wire in this lane
+      for (const iv of intervals) {
+          // Overlap condition: not (end < iv.min or start > iv.max)
+          // add a small buffer (5px) to prevent touching ends from colliding
+          if (start < iv.max - 5 && end > iv.min + 5) {
+              return false; // Occupied
+          }
+      }
+      return true; // Free
   };
 
+  const reserveLane = (offset: number, y1: number, y2: number) => {
+      const start = Math.min(y1, y2);
+      const end = Math.max(y1, y2);
+      if (!laneUsage.has(offset)) laneUsage.set(offset, []);
+      laneUsage.get(offset)!.push({ min: start, max: end });
+  };
+
+  const getCollisionFreeBusOffset = (sourceX: number, targetX: number, sourceY: number, targetY: number): [number, number] => {
+    const midpointX = (sourceX + targetX) / 2;
+    const baseSpacing = 15;
+    
+    // Attempt lanes in an expanding spiral: 0, 15, -15, 30, -30, etc.
+    // We try up to 20 lanes to find a free spot.
+    for (let i = 0; i < 50; i++) {
+        const multiplier = Math.ceil(i / 2);
+        const sign = i % 2 === 0 ? 1 : -1;
+        const spread = multiplier * baseSpacing * sign;
+        
+        // Calculate the absolute X position of this candidate lane
+        const targetLaneX = MAIN_BUS_X + spread;
+        const candidateOffset = targetLaneX - midpointX;
+
+        // Check if this specific vertical segment is free
+        if (isLaneFree(targetLaneX, sourceY, targetY)) {
+            reserveLane(targetLaneX, sourceY, targetY);
+            return [candidateOffset, targetLaneX];
+        }
+    }
+    
+    // Fallback: Just return the last tried lane if everything is full (rare)
+    return [0, MAIN_BUS_X]; 
+  };
+
+  // For Stage 2, we stick to the index-based fan-out because overlapping is allowed/expected at the pin entry,
+  // but we can apply simple lane logic if needed. For now, the index logic works well for fan-in.
   const calculateStageOffset = (sourceX: number, targetX: number, targetIndex: number, totalInputs: number): [number, number] => {
       const spacing = 15;
       const start = -((totalInputs - 1) * spacing) / 2; 
@@ -59,19 +100,20 @@ export const generateSchematic = (
       style: { background: 'transparent', border: 'none', width: 60, height: 50 },
   });
 
-  const createInputEdge = (source: string, target: string, isInv: boolean, sourceHandle: string, targetHandle: string, sourceX: number, targetX: number): Edge => {
-      const [offset, laneX] = calculateBusOffset(sourceX, targetX);
+  const createInputEdge = (source: string, target: string, isInv: boolean, sourceHandle: string, targetHandle: string, sourceX: number, targetX: number, sourceY: number, targetY: number): Edge => {
+      // USE NEW COLLISION LOGIC
+      const [offset, laneX] = getCollisionFreeBusOffset(sourceX, targetX, sourceY, targetY);
+      
       return {
           id: `e-in-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`,
           source, target, sourceHandle, targetHandle,
           type: 'smart', 
-          // IMPORTANT: Store sourceX/laneX for post-processing
           data: { offset, laneX, sourceX, hasDot: false }, 
           style: { stroke: isInv ? '#ef4444' : '#334155', strokeWidth: 2 },
       };
   };
 
-  const createStageEdge = (source: string, target: string, sourceHandle: string, targetHandle: string, targetIndex: number, totalInputs: number, sourceX: number, targetX: number): Edge => {
+  const createStageEdge = (source: string, target: string, sourceHandle: string, targetHandle: string, targetIndex: number, totalInputs: number, sourceX: number, targetX: number, sourceY: number, targetY: number): Edge => {
       const [offset, laneX] = calculateStageOffset(sourceX, targetX, targetIndex, totalInputs);
       return {
           id: `e-stg-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`,
@@ -97,7 +139,6 @@ export const generateSchematic = (
     const yPos = getY(i);
     nodes.push(createNode(id, { x: SPACING.inputsX, y: yPos }, getLabel(i), 'SWITCH'));
     
-    // Battery Wire
     edges.push({
       id: `e-bat-${id}`, source: batteryId, target: id, sourceHandle: 'top', targetHandle: 'top',
       type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }, data: { offset: 0, hasDot: false }
@@ -114,7 +155,8 @@ export const generateSchematic = (
       const invId = getId();
       inverterIds[i] = invId;
       const label = gateMode === 'STANDARD' ? 'NOT' : gateMode;
-      nodes.push(createNode(invId, { x: SPACING.notX, y: getY(i) + 60 }, label, label, { inputCount: 1 }));
+      const invY = getY(i) + 60;
+      nodes.push(createNode(invId, { x: SPACING.notX, y: invY }, label, label, { inputCount: 1 }));
       
       edges.push({
         id: `e-in-${i}-inv`, source: inputIds[i], target: invId, sourceHandle: 'out', targetHandle: 'in',
@@ -152,8 +194,12 @@ export const generateSchematic = (
       const targetBit = isNorMulti ? '1' : '0';
       const useInverter = bit === targetBit;
       const sourceId = useInverter ? inverterIds[inputIdx] : inputIds[inputIdx];
+      
       if (sourceId) {
         const srcX = useInverter ? SPACING.notX : SPACING.inputsX;
+        const srcY = useInverter ? (getY(inputIdx) + 60) : getY(inputIdx); 
+
+        // IMPORTANT: Call createInputEdge which now uses collision logic
         edges.push(createInputEdge(
             sourceId, 
             gateId, 
@@ -161,7 +207,9 @@ export const generateSchematic = (
             'out', 
             `in-${handleIdx}`, 
             srcX,           
-            SPACING.stage1X 
+            SPACING.stage1X,
+            srcY,
+            gateY
         ));
         handleIdx++;
       }
@@ -178,7 +226,8 @@ export const generateSchematic = (
 
   if (terms.length === 1) {
     const termId = gateIds[0];
-    edges.push(createStageEdge(termId, outputNodeId, 'out', 'in', 0, 1, SPACING.stage1X, SPACING.outputX));
+    const gateY = terms.length > 1 ? getY(0) : centerY;
+    edges.push(createStageEdge(termId, outputNodeId, 'out', 'in', 0, 1, SPACING.stage1X, SPACING.outputX, gateY, centerY));
   } else {
     const finalId = getId();
     let label = gateMode === 'STANDARD' ? 'OR' : gateMode;
@@ -186,6 +235,7 @@ export const generateSchematic = (
     nodes.push(createNode(finalId, { x: SPACING.stage2X, y: centerY }, label, label, { inputCount: finalGateInputs }));
 
     gateIds.forEach((gId, index) => {
+       const gateY = terms.length > 1 ? getY(index) : centerY; 
        edges.push(createStageEdge(
            gId, 
            finalId, 
@@ -194,7 +244,9 @@ export const generateSchematic = (
            index,
            finalGateInputs,
            SPACING.stage1X,
-           SPACING.stage2X
+           SPACING.stage2X,
+           gateY,
+           centerY
        ));
     });
 
@@ -208,9 +260,8 @@ export const generateSchematic = (
     }
   }
 
-  // --- 5. JUNCTION DOT LOGIC (Robust Method) ---
+  // --- 5. DOT LOGIC ---
   const edgeGroups = new Map<string, Edge[]>();
-  
   edges.forEach(edge => {
     if (edge.type === 'smart') {
       const key = `${edge.source}:${edge.sourceHandle}`;
@@ -220,43 +271,32 @@ export const generateSchematic = (
   });
 
   edgeGroups.forEach((groupEdges) => {
-      // If >1 wires leave a pin, it's a branch.
       if (groupEdges.length > 1) {
-          
-          // 1. Calculate distances for all edges in this group
-          // We assume "length" is the horizontal distance to the turn (laneX)
-          const rankedEdges = groupEdges.map(e => {
+          let maxDist = -Infinity;
+          groupEdges.forEach(e => {
              const laneX = e.data?.laneX as number || 0;
              const srcX = e.data?.sourceX as number || 0;
              const dist = Math.abs(laneX - srcX);
-             return { edge: e, dist };
+             if (dist > maxDist) maxDist = dist;
           });
 
-          // 2. Sort by Distance Ascending (Shortest -> Longest)
-          rankedEdges.sort((a, b) => a.dist - b.dist);
-
-          // 3. Mark all as Dots EXCEPT the last one (Furthest)
-          rankedEdges.forEach((item, index) => {
-              const isLast = index === rankedEdges.length - 1;
-              // Must clone data to trigger React update
-              item.edge.data = { 
-                  ...item.edge.data, 
-                  hasDot: !isLast 
-              };
+          groupEdges.forEach(e => {
+             const laneX = e.data?.laneX as number || 0;
+             const srcX = e.data?.sourceX as number || 0;
+             const dist = Math.abs(laneX - srcX);
+             if (Math.abs(dist - maxDist) > 1.0) {
+                 e.data = { ...e.data, hasDot: true };
+             } else {
+                 e.data = { ...e.data, hasDot: false };
+             }
           });
       }
   });
 
-  // --- 6. RENDER ORDER SORT (CRITICAL FIX) ---
-  // Ensure Long wires (Trunks) are drawn FIRST (Background).
-  // Ensure Short wires (Taps with dots) are drawn LAST (Foreground).
-  // This prevents the Trunk's white Halo from erasing the Tap's black Dot.
+  // --- 6. RENDER ORDER ---
   edges.sort((a, b) => {
-      // Calculate length (approximate)
       const distA = Math.abs((a.data?.laneX as number || 0) - (a.data?.sourceX as number || 0));
       const distB = Math.abs((b.data?.laneX as number || 0) - (b.data?.sourceX as number || 0));
-      
-      // Sort Descending: Longest Dist -> Shortest Dist
       return distB - distA; 
   });
 
