@@ -10,9 +10,11 @@ Built for students, engineers, and hobbyists, LogiSketch simplifies the process 
 ## 🚀 Features
 
 - **Real-Time Parsing**: Type equations (e.g., `AB + C'`) and see the circuit update instantly. Supports up to 5 inputs (A-E).
+- **Schematic Fidelity**: Features realistic Triangle SPDT Switches, standard battery symbols, and high-fidelity logic gate representations.
 - **Universal Logic Modes**: Switch between **Standard** gates (AND/OR/NOT), **NAND-only**, and **NOR-only** implementations with a single click.
 - **Interactive Visualization**: Powered by [React Flow](https://reactflow.dev/), the circuit diagram is fully interactive—zoom, pan, and drag nodes.
 - **Dynamic Truth Table**: Automatically generates the full truth table for your current equation.
+- **Professional Wiring**: Implements specialized Trunk-Logic routing for power and ground rails, mimicking professional circuit schematics.
 - **Professional Reports**: Generate and download a high-quality PNG report containing the equation, truth table, and circuit diagram.
 - **Mobile Optimized**: Fully responsive design with a split-stack layout for mobile devices and touch-friendly controls.
 
@@ -74,6 +76,8 @@ Built for students, engineers, and hobbyists, LogiSketch simplifies the process 
 - [x] Basic Gate Implementation
 - [x] Universal Logic (NAND/NOR)
 - [x] Report Generation
+- [x] Triangle SPDT Switch UI
+- [x] Professional Trunk Wiring
 
 ## 🤝 Contributing
 
