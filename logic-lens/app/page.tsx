@@ -4,12 +4,13 @@ import Image from "next/image";
 import {
   ReactFlow,
   Background,
-  Controls,
+  Panel,
+  useReactFlow,
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { FiPlay } from "react-icons/fi";
+import { FiPlay, FiMaximize, FiLock, FiUnlock } from "react-icons/fi";
 
 // 1. IMPORT BOTH GENERATORS
 import { generateCircuit } from "@/utils/CircuitGenerator";
@@ -28,13 +29,43 @@ import SmartStepEdge from "@/components/SmartStepEdge";
 export type GateMode = "STANDARD" | "NAND" | "NOR";
 export type DisplayStyle = "BLOCK" | "SCHEMATIC";
 
+// --- CUSTOM PILL CONTROLS PANEL ---
+function ModernControls({
+  isInteractive,
+  setIsInteractive,
+}: {
+  isInteractive: boolean;
+  setIsInteractive: (val: boolean) => void;
+}) {
+  const { fitView } = useReactFlow();
+
+  return (
+    <Panel
+      position="bottom-right"
+      className="bg-white/80 backdrop-blur-md border border-slate-200 shadow-xl rounded-full flex items-center p-1 mb-4 mr-4 lg:mb-8 lg:mr-8 z-50"
+    >
+      {/* Fit View (Center) */}
+      <button
+        onClick={() => fitView({ duration: 500, padding: 0.2 })}
+        className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-slate-100/80 rounded-full transition-all"
+        title="Center Focus"
+      >
+        <FiMaximize className="text-lg" />
+      </button>
+    </Panel>
+  );
+}
+
 export default function LogicLens() {
   const [numInputs, setNumInputs] = useState(3);
   const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
   const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
-  const [displayStyle, setDisplayStyle] = useState<DisplayStyle>("BLOCK");
+  const [displayStyle, setDisplayStyle] = useState<DisplayStyle>("SCHEMATIC");
 
-  // NEW STATE LOGIC: Split Draft vs Active
+  // INTERACTIVITY STATE
+  const [isInteractive, setIsInteractive] = useState(true);
+
+  // STATE LOGIC
   const [draftEquation, setDraftEquation] = useState<string>("");
   const [activeEquation, setActiveEquation] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -43,22 +74,12 @@ export default function LogicLens() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   // 3. REGISTER NODE TYPES
-  const nodeTypes = useMemo(
-    () => ({
-      schematic: SchematicNode,
-    }),
-    [],
-  );
+  const nodeTypes = useMemo(() => ({ schematic: SchematicNode }), []);
 
   // 4. REGISTER EDGE TYPES
-  const edgeTypes = useMemo(
-    () => ({
-      smart: SmartStepEdge,
-    }),
-    [],
-  );
+  const edgeTypes = useMemo(() => ({ smart: SmartStepEdge }), []);
 
-  // 5. MAIN EFFECT LOOP - Depends on activeEquation logic now
+  // 5. MAIN EFFECT LOOP
   useEffect(() => {
     let result;
 
@@ -71,7 +92,6 @@ export default function LogicLens() {
     setNodes(result.nodes);
     setEdges(result.edges);
 
-    // Auto-update the draft box if the user changes the truth table directly
     const eq = getSimplifiedEquation(numInputs, tableOutputs);
     setActiveEquation(eq);
     setDraftEquation(eq);
@@ -82,13 +102,12 @@ export default function LogicLens() {
   const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setDraftEquation(val);
-    setErrorMsg(null); // Clear error while typing
+    setErrorMsg(null);
   };
 
   const handleGenerate = () => {
     const val = draftEquation.toUpperCase();
 
-    // Validation
     const invalidChars = val.match(/[^A-E0-1\+\'\(\)\s\u2018\u2019`]/g);
     if (invalidChars) {
       setErrorMsg(
@@ -97,7 +116,6 @@ export default function LogicLens() {
       return;
     }
 
-    // Input Scaling
     const uniqueVars = new Set(val.match(/[A-E]/g));
     let requiredInputs = numInputs;
     uniqueVars.forEach((char) => {
@@ -110,7 +128,6 @@ export default function LogicLens() {
       setNumInputs(requiredInputs);
     }
 
-    // Parsing
     const newTable = parseEquationToTable(val, requiredInputs);
     if (newTable) {
       setTableOutputs(newTable);
@@ -305,7 +322,7 @@ export default function LogicLens() {
       {/* RIGHT PANEL (Canvas) */}
       <div className="order-first lg:order-last w-full lg:flex-1 h-[40vh] lg:h-full relative bg-slate-50 shrink-0 min-h-[300px] touch-none">
         <StaggeredDropDown
-          equation={activeEquation} // Pass active equation to export
+          equation={activeEquation}
           numInputs={numInputs}
           tableOutputs={tableOutputs}
         />
@@ -322,9 +339,21 @@ export default function LogicLens() {
           minZoom={0.1}
           maxZoom={4}
           proOptions={{ hideAttribution: true }}
+          panOnDrag={isInteractive}
+          zoomOnScroll={isInteractive}
+          zoomOnPinch={isInteractive}
+          zoomOnDoubleClick={isInteractive}
+          nodesConnectable={isInteractive}
+          nodesDraggable={isInteractive}
+          elementsSelectable={isInteractive}
         >
           <Background color="#cbd5e1" gap={25} size={1} />
-          <Controls className="bg-white border-slate-200 shadow-sm fill-slate-600" />
+
+          {/* Inject Modern Pill Controls */}
+          <ModernControls
+            isInteractive={isInteractive}
+            setIsInteractive={setIsInteractive}
+          />
         </ReactFlow>
       </div>
     </div>
