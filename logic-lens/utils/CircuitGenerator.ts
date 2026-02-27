@@ -52,10 +52,31 @@ export const generateCircuit = (
   const inverterIds: Record<number, string> = {}; 
 
   for (let i = 0; i < numInputs; i++) {
-    const isNorMulti = mode === 'NOR' && numInputs > 1;
-    const targetBit = isNorMulti ? '1' : '0';
+    let needsInverter = false;
 
-    const needsInverter = terms.some(term => term[i] === targetBit);
+    // Check every term to see if this specific variable needs an inverter
+    for (const term of terms) {
+      const bit = term[i];
+      if (bit === '-') continue;
+
+      const inputCount = term.split('').filter(c => c !== '-').length;
+
+      if (mode === 'NOR') {
+        if (inputCount > 1 && bit === '1') needsInverter = true;
+        if (inputCount === 1 && bit === '0') needsInverter = true;
+      } else if (mode === 'NAND') {
+        // NAND De Morgan's: To build an OR gate (multiple terms) from NANDs, 
+        // the inputs to the final NAND must be inverted.
+        // If a term is a single variable ('A', bit='1'), we MUST invert it to 'A'' 
+        // before feeding it into the final NAND gate to achieve A + ...
+        if (terms.length > 1 && inputCount === 1 && bit === '1') needsInverter = true;
+        // Standard inversion for NOT A ('0')
+        if (bit === '0') needsInverter = true;
+      } else {
+        // Standard: Always invert '0's
+        if (bit === '0') needsInverter = true;
+      }
+    }
 
     if (needsInverter) {
       const invId = getId();
@@ -90,25 +111,30 @@ export const generateCircuit = (
   terms.forEach((term, idx) => {
     const connectedInputs = term.split('').filter(c => c !== '-');
     const inputCount = connectedInputs.length;
-    
-    const isNorMulti = mode === 'NOR' && numInputs > 1;
 
-    // LOGIC FIX 1: FORCE GATES
-    // In NOR-Multi mode, inputs are pre-inverted (De Morgan). 
-    // MUST force the gate to correct it back to A.
-    const forceGate = (mode === 'NAND' && terms.length > 1) || isNorMulti;
-
-    if (inputCount === 1 && !forceGate) {
-        // Direct wire optimization (Standard Mode or Single-Input NAND)
+    if (inputCount === 1) {
+        // Single variable term
         const inputIndex = term.split('').findIndex(c => c !== '-');
         const bit = term[inputIndex];
-        const targetBit = '0'; // Standard target
-        const useInverter = bit === targetBit;
+        
+        let useInverter = false;
+        
+        if (mode === 'NAND' && terms.length > 1) {
+           // If we have multiple terms (an OR operation), AND we are in NAND mode,
+           // we need to feed the INVERTED signal into the final NAND gate.
+           // If bit is '1' (A), we need 'A'' -> useInverter = true.
+           // If bit is '0' (A'), we need 'A' -> useInverter = false (because double inversion cancels out).
+           useInverter = (bit === '1');
+        } else {
+           // Standard / NOR behavior for single variables
+           useInverter = (bit === '0'); 
+        }
+
         gateIds.push(useInverter ? inverterIds[inputIndex] : inputIds[inputIndex]);
         return;
     }
 
-    // Create a Gate
+    // Create a Gate for terms with >1 inputs
     const gateId = getId();
     gateIds.push(gateId);
 
@@ -126,12 +152,16 @@ export const generateCircuit = (
       style: { background: color, border: `1px solid ${border}`, borderRadius: '4px' }
     });
 
-    // Connect inputs
+    // Connect inputs to the gate
     term.split('').forEach((bit, inputIdx) => {
       if (bit === '-') return; 
 
-      const targetBit = isNorMulti ? '1' : '0';
-      const useInverter = bit === targetBit;
+      let useInverter = false;
+      if (mode === 'NOR') {
+        useInverter = (bit === '1');
+      } else {
+        useInverter = (bit === '0');
+      }
       
       const sourceId = useInverter ? inverterIds[inputIdx] : inputIds[inputIdx];
 
@@ -162,9 +192,6 @@ export const generateCircuit = (
     const term = terms[0];
     const inputCount = term.split('').filter(c => c !== '-').length;
 
-    // LOGIC FIX 2: NO FIXER FOR NOR
-    // NAND(A,B) = (AB)'. Needs fixer to be AB.
-    // NOR(A',B') = (A'+B')' = AB. Already positive! No fixer needed.
     const needsFixer = (mode === 'NAND' && inputCount > 1);
 
     if (needsFixer) {
@@ -182,7 +209,7 @@ export const generateCircuit = (
     }
 
   } else {
-    // MULTIPLE TERMS LOGIC
+    // MULTIPLE TERMS LOGIC (OR Operation)
     const finalId = getId();
     let finalLabel = 'OR';
     let finalColor = '#2563eb';
