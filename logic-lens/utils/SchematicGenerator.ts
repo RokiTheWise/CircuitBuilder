@@ -33,11 +33,10 @@ export const generateSchematic = (
 
   // --- LAYOUT GRID ---
   const BATTERY_X = 50;
-  const POWER_LANE_X = 100; // Red Vertical Bus
-  const GND_LANE_X = 160;   // Black Vertical Bus
-  const INPUTS_X = 240;     // Switches
+  const POWER_LANE_X = 100;
+  const GND_LANE_X = 160;  
+  const INPUTS_X = 240;    
 
-  // Handle Offsets (Matches SchematicNode.tsx)
   const VCC_OFFSET = 25;    
   const GND_OFFSET = 45;    
 
@@ -57,7 +56,7 @@ export const generateSchematic = (
   let nodeId = 1;
   const getId = () => `sch-${nodeId++}`; 
 
-  // --- 2. COLLISION MANAGER (Standard) ---
+  // --- 2. COLLISION MANAGER ---
   const laneUsage = new Map<number, Array<{min: number, max: number}>>();
   const isLaneFree = (targetLaneX: number, y1: number, y2: number) => {
       const start = Math.min(y1, y2);
@@ -80,7 +79,6 @@ export const generateSchematic = (
     const midpointX = (sourceX + targetX) / 2;
     const baseSpacing = 30; 
     const MAX_BUS_X = SPACING.stage1X - 80;
-    
     for (let i = 0; i < 300; i++) {
         const multiplier = Math.ceil(i / 2);
         const sign = i % 2 === 0 ? 1 : -1;
@@ -103,23 +101,11 @@ export const generateSchematic = (
   // --- EDGE FACTORIES ---
   const createInputEdge = (source: string, target: string, isInv: boolean, sourceHandle: string, targetHandle: string, sourceX: number, targetX: number, sourceY: number, targetY: number): Edge => {
       const [offset, laneX] = getCollisionFreeBusOffset(sourceX, targetX, sourceY, targetY);
-      return {
-          id: `e-in-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`,
-          source, target, sourceHandle, targetHandle,
-          type: 'smart', 
-          data: { offset, laneX, sourceX, sourceY, hasDot: false }, 
-          style: { stroke: isInv ? '#ef4444' : '#334155', strokeWidth: 2 },
-      };
+      return { id: `e-in-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`, source, target, sourceHandle, targetHandle, type: 'smart', data: { offset, laneX, sourceX, sourceY, hasDot: false }, style: { stroke: isInv ? '#ef4444' : '#334155', strokeWidth: 2 }};
   };
   const createStageEdge = (source: string, target: string, sourceHandle: string, targetHandle: string, targetIndex: number, totalInputs: number, sourceX: number, targetX: number, sourceY: number, targetY: number): Edge => {
       const [offset, laneX] = calculateStageOffset(sourceX, targetX, targetIndex, totalInputs);
-      return {
-          id: `e-stg-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`,
-          source, target, sourceHandle, targetHandle,
-          type: 'smart',
-          data: { offset, laneX, sourceX, hasDot: false },
-          style: { stroke: '#334155', strokeWidth: 2 },
-      };
+      return { id: `e-stg-${source}-${target}-${Math.random().toString(36).substr(2, 5)}`, source, target, sourceHandle, targetHandle, type: 'smart', data: { offset, laneX, sourceX, hasDot: false }, style: { stroke: '#334155', strokeWidth: 2 }};
   };
 
   const getY = (idx: number) => idx * SPACING.rowHeight + 50;
@@ -136,27 +122,13 @@ export const generateSchematic = (
   const mainGndId = getId();
   nodes.push(createNode(mainGndId, { x: GND_LANE_X, y: circuitBottomY }, 'GND', 'GND'));
 
-  // Wire: Battery Negative -> Main Ground
-  edges.push({
-    id: `e-bat-gnd`, source: batteryId, target: mainGndId, sourceHandle: 'bot', targetHandle: 'top',
-    type: 'step', style: { stroke: '#334155', strokeWidth: 2 }, data: { hasDot: false }
-  });
+  edges.push({ id: `e-bat-gnd`, source: batteryId, target: mainGndId, sourceHandle: 'bot', targetHandle: 'top', type: 'step', style: { stroke: '#334155', strokeWidth: 2 }, data: { hasDot: false }});
 
   const outputNodeId = getId();
   const voltX = terms.length === 0 ? 400 : SPACING.outputX; 
   nodes.push(createNode(outputNodeId, { x: voltX, y: centerY }, 'Q', 'VOLTMETER', { inputCount: 1 }));
 
-  // Wire: Voltmeter -> Ground Return
-  edges.push({
-    id: `e-return-loop`,
-    source: outputNodeId,
-    target: mainGndId,
-    sourceHandle: 'bot', 
-    targetHandle: 'right-in', 
-    type: 'step',        
-    style: { stroke: '#334155', strokeWidth: 2 },
-    data: { hasDot: false }
-  });
+  edges.push({ id: `e-return-loop`, source: outputNodeId, target: mainGndId, sourceHandle: 'bot', targetHandle: 'right-in', type: 'step', style: { stroke: '#334155', strokeWidth: 2 }, data: { hasDot: false }});
 
   if (terms.length === 0) {
       edges.push({ id: 'gnd-out', source: mainGndId, target: outputNodeId, sourceHandle: 'top', targetHandle: 'in', type: 'smoothstep', style: { stroke: '#334155', strokeWidth: 2 }});
@@ -179,52 +151,37 @@ export const generateSchematic = (
     const switchY = getY(i);
     nodes.push(createNode(id, { x: SPACING.inputsX, y: switchY }, getLabel(i), 'SWITCH'));
     
-    // 1. POWER WIRE
-    // Connects Battery -> Power Bus -> Switch Left
     const vccY = switchY + VCC_OFFSET;
-    edges.push({ 
-        id: `e-bat-${id}`, 
-        source: batteryId, 
-        target: id, 
-        sourceHandle: 'top', 
-        targetHandle: 'vcc', 
-        type: 'smart', 
-        style: { stroke: '#334155', strokeWidth: 2 }, 
-        data: { 
-            laneX: POWER_LANE_X, 
-            hasDot: false, // CLEAN: No dots
-            dotX: POWER_LANE_X,
-            dotY: vccY
-        } 
-    });
+    edges.push({ id: `e-bat-${id}`, source: batteryId, target: id, sourceHandle: 'top', targetHandle: 'vcc', type: 'smart', style: { stroke: '#334155', strokeWidth: 2 }, data: { laneX: POWER_LANE_X, hasDot: false, dotX: POWER_LANE_X, dotY: vccY } });
 
-    // 2. GROUND WIRE
-    // Connects Switch Left -> Ground Bus -> Main Ground
     const gndY = switchY + GND_OFFSET;
-    edges.push({
-        id: `e-gnd-${id}`, 
-        source: id, 
-        target: mainGndId, 
-        sourceHandle: 'gnd', 
-        targetHandle: 'top', 
-        type: 'smart', 
-        style: { stroke: '#334155', strokeWidth: 2 }, 
-        data: { 
-            laneX: GND_LANE_X, 
-            hasDot: false, // CLEAN: No dots
-            dotX: GND_LANE_X,
-            dotY: gndY
-        } 
-    });
+    edges.push({ id: `e-gnd-${id}`, source: id, target: mainGndId, sourceHandle: 'gnd', targetHandle: 'top', type: 'smart', style: { stroke: '#334155', strokeWidth: 2 }, data: { laneX: GND_LANE_X, hasDot: false, dotX: GND_LANE_X, dotY: gndY } });
   }
 
-  // --- REST OF GENERATOR (Logic Gates) ---
+  // --- REST OF GENERATOR (Inverters, Gates) ---
   const inverterIds: Record<number, string> = {};
+  
   for (let i = 0; i < numInputs; i++) {
-    const isNorMulti = gateMode === 'NOR' && numInputs > 1;
-    const targetBit = isNorMulti ? '1' : '0';
+    let needsInverter = false;
 
-    if (terms.some(term => term[i] === targetBit)) {
+    for (const term of terms) {
+      const bit = term[i];
+      if (bit === '-') continue;
+
+      const inputCount = term.split('').filter(c => c !== '-').length;
+
+      if (gateMode === 'NOR') {
+        if (inputCount > 1 && bit === '1') needsInverter = true;
+        if (inputCount === 1 && bit === '0') needsInverter = true;
+      } else if (gateMode === 'NAND') {
+        if (terms.length > 1 && inputCount === 1 && bit === '1') needsInverter = true;
+        if (bit === '0') needsInverter = true;
+      } else {
+        if (bit === '0') needsInverter = true;
+      }
+    }
+
+    if (needsInverter) {
       const invId = getId();
       inverterIds[i] = invId;
       const label = gateMode === 'STANDARD' ? 'NOT' : gateMode;
@@ -237,12 +194,19 @@ export const generateSchematic = (
   terms.forEach((term, idx) => {
     const connectedInputs = term.split('').filter(c => c !== '-');
     const inputCount = connectedInputs.length;
-    const isNorMulti = gateMode === 'NOR' && numInputs > 1;
-    const forceGate = (gateMode === 'NAND' && terms.length > 1) || isNorMulti;
 
-    if (inputCount === 1 && !forceGate) {
+    // FIX 2: Single variable routing
+    if (inputCount === 1) {
         const inputIndex = term.split('').findIndex(c => c !== '-');
-        const useInverter = term[inputIndex] === '0';
+        const bit = term[inputIndex];
+        let useInverter = false;
+
+        if (gateMode === 'NAND' && terms.length > 1) {
+           useInverter = (bit === '1');
+        } else {
+           useInverter = (bit === '0');
+        }
+
         gateIds.push(useInverter ? inverterIds[inputIndex] : inputIds[inputIndex]);
         return;
     }
@@ -256,8 +220,13 @@ export const generateSchematic = (
     let handleIdx = 0;
     term.split('').forEach((bit, inputIdx) => {
       if (bit === '-') return;
-      const targetBit = isNorMulti ? '1' : '0';
-      const useInverter = bit === targetBit;
+      let useInverter = false;
+      if (gateMode === 'NOR') {
+        useInverter = (bit === '1');
+      } else {
+        useInverter = (bit === '0');
+      }
+      
       const sourceId = useInverter ? inverterIds[inputIdx] : inputIds[inputIdx];
       if (sourceId) {
         const srcX = useInverter ? SPACING.notX : SPACING.inputsX;
@@ -270,8 +239,21 @@ export const generateSchematic = (
 
   if (terms.length === 1) {
     const termId = gateIds[0];
+    const term = terms[0];
+    const inputCount = term.split('').filter(c => c !== '-').length;
     const gateY = terms.length > 1 ? (getY(0) + GATE_STAGGER) : centerY;
-    edges.push(createStageEdge(termId, outputNodeId, 'out', 'in', 0, 1, SPACING.stage1X, SPACING.outputX, gateY, centerY));
+
+    // FIX 3: NAND Single Term Fixer applied to Schematics
+    const needsFixer = (gateMode === 'NAND' && inputCount > 1);
+
+    if (needsFixer) {
+        const fixerId = getId();
+        nodes.push(createNode(fixerId, { x: SPACING.stage2X, y: centerY }, 'NAND', 'NAND', { inputCount: 1 }));
+        edges.push(createStageEdge(termId, fixerId, 'out', 'in', 0, 1, SPACING.stage1X, SPACING.stage2X, gateY, centerY));
+        edges.push(createStageEdge(fixerId, outputNodeId, 'out', 'in', 0, 1, SPACING.stage2X, SPACING.outputX, centerY, centerY));
+    } else {
+        edges.push(createStageEdge(termId, outputNodeId, 'out', 'in', 0, 1, SPACING.stage1X, SPACING.outputX, gateY, centerY));
+    }
   } else {
     const finalId = getId();
     let label = gateMode === 'STANDARD' ? 'OR' : gateMode;
@@ -293,47 +275,17 @@ export const generateSchematic = (
     }
   }
 
-  // --- LOGIC DOTS (Kept for Gate Logic, as those work fine) ---
   const edgeGroups = new Map<string, Edge[]>();
-  edges.forEach(edge => {
-    if (edge.type === 'smart') {
-      const key = `${edge.source}:${edge.sourceHandle}`;
-      if (!edgeGroups.has(key)) edgeGroups.set(key, []);
-      edgeGroups.get(key)!.push(edge);
-    }
-  });
-
+  edges.forEach(edge => { if (edge.type === 'smart') { const key = `${edge.source}:${edge.sourceHandle}`; if (!edgeGroups.has(key)) edgeGroups.set(key, []); edgeGroups.get(key)!.push(edge); }});
   edgeGroups.forEach((groupEdges) => {
       const isLogicWire = groupEdges[0].sourceHandle === 'out';
       if (groupEdges.length > 1 && isLogicWire) {
           let maxDist = -Infinity;
-          groupEdges.forEach(e => {
-             const laneX = e.data?.laneX as number || 0;
-             const srcX = e.data?.sourceX as number || 0;
-             const dist = Math.abs(laneX - srcX);
-             if (dist > maxDist) maxDist = dist;
-          });
-
-          groupEdges.forEach(e => {
-             const laneX = e.data?.laneX as number || 0;
-             const srcX = e.data?.sourceX as number || 0;
-             const dist = Math.abs(laneX - srcX);
-             if (Math.abs(dist - maxDist) > 1.0) {
-                 e.data = { ...e.data, hasDot: true };
-             } else {
-                 e.data = { ...e.data, hasDot: false };
-             }
-          });
+          groupEdges.forEach(e => { const laneX = e.data?.laneX as number || 0; const srcX = e.data?.sourceX as number || 0; const dist = Math.abs(laneX - srcX); if (dist > maxDist) maxDist = dist; });
+          groupEdges.forEach(e => { const laneX = e.data?.laneX as number || 0; const srcX = e.data?.sourceX as number || 0; const dist = Math.abs(laneX - srcX); if (Math.abs(dist - maxDist) > 1.0) { e.data = { ...e.data, hasDot: true }; } else { e.data = { ...e.data, hasDot: false }; }});
       }
   });
-
-  edges.sort((a, b) => {
-      const getDist = (e: Edge) => {
-          if (e.type !== 'smart') return 0;
-          return Math.abs((e.data?.laneX as number || 0) - (e.data?.sourceX as number || 0));
-      };
-      return getDist(b) - getDist(a); 
-  });
+  edges.sort((a, b) => { const getDist = (e: Edge) => (e.type !== 'smart' ? 0 : Math.abs((e.data?.laneX as number || 0) - (e.data?.sourceX as number || 0))); return getDist(b) - getDist(a); });
 
   return { nodes, edges };
 };
