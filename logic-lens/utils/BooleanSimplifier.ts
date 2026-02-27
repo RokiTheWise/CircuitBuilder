@@ -4,22 +4,19 @@ const getVar = (i: number) => String.fromCharCode(65 + i);
 
 // 1. THE CORE SOLVER (Returns raw patterns like "1-0-")
 export function getPrimeImplicants(numInputs: number, outputs: Record<number, number>): string[] {
-  // SAFETY FILTER: Calculate the maximum valid row index (e.g., 2^1 = 2 rows: 0 and 1)
   const maxRows = Math.pow(2, numInputs);
-
   const minterms = Object.keys(outputs)
     .map(Number)
-    // CRITICAL FIX: Ignore "ghost" rows from previous larger tables
     .filter(i => i < maxRows && outputs[i] === 1);
 
   if (minterms.length === 0) return [];
-  // If all valid rows are 1, return a single term of all dashes
   if (minterms.length === maxRows) return [Array(numInputs).fill('-').join('')];
 
-  let groups = new Set<string>(minterms.map(m => toBin(m, numInputs)));
+  const mintermBins = minterms.map(m => toBin(m, numInputs));
+  let groups = new Set<string>(mintermBins);
   let primeImplicants = new Set<string>();
 
-  // Quine-McCluskey Algorithm
+  // --- STEP 1: Find ALL Prime Implicants ---
   while (groups.size > 0) {
     const nextGroups = new Set<string>();
     const used = new Set<string>();
@@ -56,7 +53,87 @@ export function getPrimeImplicants(numInputs: number, outputs: Record<number, nu
     groups = nextGroups;
   }
   
-  return Array.from(primeImplicants);
+  const piArray = Array.from(primeImplicants);
+
+  // --- STEP 2: The Prime Implicant Chart  ---
+  
+  // Helper to check if a prime implicant covers a minterm
+  const covers = (pi: string, m: string) => {
+    for(let i = 0; i < pi.length; i++) {
+      if(pi[i] !== '-' && pi[i] !== m[i]) return false;
+    }
+    return true;
+  };
+
+  // Map out which minterms each Prime Implicant covers
+  const piCovers = new Map<string, string[]>();
+  piArray.forEach(pi => piCovers.set(pi, mintermBins.filter(m => covers(pi, m))));
+
+  const essential = new Set<string>();
+  let remainingMinterms = new Set<string>(mintermBins);
+
+  // Find Essential Prime Implicants (Minterms covered by ONLY ONE prime implicant)
+  mintermBins.forEach(m => {
+    const coveringPIs = piArray.filter(pi => covers(pi, m));
+    if (coveringPIs.length === 1) {
+       essential.add(coveringPIs[0]);
+    }
+  });
+
+  // Remove the minterms that are already covered by the essentials
+  essential.forEach(pi => {
+    piCovers.get(pi)?.forEach(m => remainingMinterms.delete(m));
+  });
+
+  // If everything is covered, we just return the essentials! (This fixes your ABC + A'CD bug)
+  if (remainingMinterms.size === 0) {
+      return Array.from(essential);
+  }
+
+// --- STEP 3: Handle leftover minterms (Petrick's Method simulation) ---
+  const remainingPIs = piArray.filter(pi => !essential.has(pi));
+  let bestAdditionalCover: string[] = remainingPIs; 
+
+  // Calculate cost (Fewer terms is vastly more important, fewer literals is the tie-breaker)
+  const getCost = (cover: string[]) => {
+      let literals = 0;
+      cover.forEach(term => {
+          for(let char of term) if (char !== '-') literals++;
+      });
+      // 100 points per term, 1 point per literal (e.g., 2 terms with 3 total vars = 203 cost)
+      return (cover.length * 100) + literals; 
+  };
+
+  const solve = (currentCover: string[], uncov: Set<string>, availablePIs: string[]) => {
+      if (uncov.size === 0) {
+         if (getCost(currentCover) < getCost(bestAdditionalCover)) {
+             bestAdditionalCover = [...currentCover];
+         }
+         return;
+      }
+      
+      // FAIL: Ran out of options
+      if (availablePIs.length === 0) return;
+      
+      // PRUNE: If current path is already worse/equal in terms than the best, stop digging
+      if (currentCover.length >= bestAdditionalCover.length) return; 
+
+      const nextMinterm = Array.from(uncov)[0];
+      const candidatePIs = availablePIs.filter(pi => covers(pi, nextMinterm));
+
+      for (const pi of candidatePIs) {
+          const newUncov = new Set(uncov);
+          piCovers.get(pi)?.forEach(m => newUncov.delete(m));
+          solve([...currentCover, pi], newUncov, availablePIs.filter(p => p !== pi));
+      }
+  };
+
+  if (remainingMinterms.size > 0) {
+      solve([], remainingMinterms, remainingPIs);
+  }
+  
+  // Combine essentials with the best additional coverage
+  return Array.from(essential).concat(bestAdditionalCover);
 }
 
 // 2. THE FORMATTER (Returns "A + B")
@@ -75,7 +152,7 @@ export function getSimplifiedEquation(numInputs: number, outputs: Record<number,
       if (term[i] === '0') part += getVar(i) + "'";
     }
     return part || "1";
-  });
+  }); 
 
   return terms.sort((a, b) => a.length - b.length || a.localeCompare(b)).join(" + ");
 }
