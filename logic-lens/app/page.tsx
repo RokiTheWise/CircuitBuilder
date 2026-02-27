@@ -9,6 +9,7 @@ import {
   useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { FiPlay } from "react-icons/fi";
 
 // 1. IMPORT BOTH GENERATORS
 import { generateCircuit } from "@/utils/CircuitGenerator";
@@ -22,7 +23,6 @@ import StaggeredDropDown from "@/components/StaggeredDropdown";
 
 // 2. IMPORT CUSTOM NODES & EDGES
 import SchematicNode from "@/components/SchematicNode";
-// REMOVED: JunctionNode import
 import SmartStepEdge from "@/components/SmartStepEdge";
 
 export type GateMode = "STANDARD" | "NAND" | "NOR";
@@ -34,8 +34,9 @@ export default function LogicLens() {
   const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
   const [displayStyle, setDisplayStyle] = useState<DisplayStyle>("BLOCK");
 
-  const [equation, setEquation] = useState<string>("");
-  const [isTyping, setIsTyping] = useState(false);
+  // NEW STATE LOGIC: Split Draft vs Active
+  const [draftEquation, setDraftEquation] = useState<string>("");
+  const [activeEquation, setActiveEquation] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -57,7 +58,7 @@ export default function LogicLens() {
     [],
   );
 
-  // 5. MAIN EFFECT LOOP
+  // 5. MAIN EFFECT LOOP - Depends on activeEquation logic now
   useEffect(() => {
     let result;
 
@@ -70,54 +71,60 @@ export default function LogicLens() {
     setNodes(result.nodes);
     setEdges(result.edges);
 
-    if (!isTyping) {
-      const eq = getSimplifiedEquation(numInputs, tableOutputs);
-      setEquation(eq);
-      setErrorMsg(null);
-    }
-  }, [numInputs, tableOutputs, gateMode, displayStyle, isTyping]);
-
-  // ... (Rest of handlers remain the same) ...
-  const handleEquationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setEquation(val);
-    setIsTyping(true);
+    // Auto-update the draft box if the user changes the truth table directly
+    const eq = getSimplifiedEquation(numInputs, tableOutputs);
+    setActiveEquation(eq);
+    setDraftEquation(eq);
     setErrorMsg(null);
+  }, [numInputs, tableOutputs, gateMode, displayStyle]);
 
-    const invalidChars = val
-      .toUpperCase()
-      .match(/[^A-E0-1\+\'\(\)\s\u2018\u2019`]/g);
+  // --- HANDLERS ---
+  const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDraftEquation(val);
+    setErrorMsg(null); // Clear error while typing
+  };
+
+  const handleGenerate = () => {
+    const val = draftEquation.toUpperCase();
+
+    // Validation
+    const invalidChars = val.match(/[^A-E0-1\+\'\(\)\s\u2018\u2019`]/g);
     if (invalidChars) {
       setErrorMsg(
         `Invalid character: "${invalidChars[0]}". Only A-E, 0, 1 allowed.`,
       );
+      return;
     }
 
-    const uniqueVars = new Set(val.toUpperCase().match(/[A-E]/g));
+    // Input Scaling
+    const uniqueVars = new Set(val.match(/[A-E]/g));
     let requiredInputs = numInputs;
     uniqueVars.forEach((char) => {
       const varIndex = char.charCodeAt(0) - 64;
       if (varIndex > requiredInputs) requiredInputs = varIndex;
     });
     requiredInputs = Math.min(5, requiredInputs);
+
     if (requiredInputs > numInputs) {
       setNumInputs(requiredInputs);
     }
 
+    // Parsing
     const newTable = parseEquationToTable(val, requiredInputs);
     if (newTable) {
       setTableOutputs(newTable);
+      setActiveEquation(val);
+      setErrorMsg(null);
     } else if (val.trim() !== "") {
-      if (!invalidChars)
-        setErrorMsg("Invalid syntax. Check parentheses or operators.");
+      setErrorMsg("Invalid syntax. Check parentheses or operators.");
     }
   };
 
-  const handleBlur = () => {
-    setIsTyping(false);
-    setErrorMsg(null);
-    const eq = getSimplifiedEquation(numInputs, tableOutputs);
-    setEquation(eq);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleGenerate();
+    }
   };
 
   return (
@@ -234,39 +241,50 @@ export default function LogicLens() {
             </div>
           </div>
 
-          {/* EQUATION INPUT */}
+          {/* EQUATION INPUT WITH GENERATE BUTTON */}
           <div
-            className={`border rounded-lg p-4 transition-all focus-within:ring-2 ${errorMsg ? "bg-red-50 border-red-200 focus-within:ring-red-300" : "bg-blue-50 border-blue-200 focus-within:ring-blue-400"}`}
+            className={`border rounded-xl p-4 transition-all focus-within:ring-2 shadow-sm ${errorMsg ? "bg-red-50 border-red-200 focus-within:ring-red-300" : "bg-white border-blue-200 focus-within:ring-blue-400"}`}
           >
-            <div className="flex justify-between items-start mb-1">
+            <div className="flex justify-between items-start mb-2">
               <label
                 htmlFor="equation-input"
-                className={`text-[10px] font-bold uppercase tracking-wider block ${errorMsg ? "text-red-500" : "text-blue-500"}`}
+                className={`text-[10px] font-bold uppercase tracking-wider block ${errorMsg ? "text-red-500" : "text-blue-600"}`}
               >
                 Boolean Equation
               </label>
               {errorMsg && (
                 <span className="text-[9px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
-                  ERROR
+                  {errorMsg}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1">
-              <span
-                className={`text-xl lg:text-2xl font-sans font-black select-none ${errorMsg ? "text-red-400" : "text-blue-600"}`}
+
+            <div className="flex items-stretch gap-2">
+              <div className="flex items-center bg-slate-50 rounded-lg px-3 border border-slate-200 flex-1 focus-within:border-blue-400 transition-colors">
+                <span
+                  className={`text-xl font-black select-none mr-2 ${errorMsg ? "text-red-400" : "text-blue-600"}`}
+                >
+                  Q=
+                </span>
+                <input
+                  id="equation-input"
+                  type="text"
+                  value={draftEquation}
+                  onChange={handleDraftChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder="e.g. AB + C'"
+                  className={`w-full bg-transparent border-none focus:outline-none text-xl lg:text-2xl font-sans font-black placeholder-slate-300 uppercase tracking-tight py-2 ${errorMsg ? "text-red-800" : "text-slate-800"}`}
+                  autoComplete="off"
+                />
+              </div>
+
+              <button
+                onClick={handleGenerate}
+                className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-lg font-bold shadow-md shadow-blue-200 transition-all active:scale-95"
+                title="Generate Circuit"
               >
-                Q=
-              </span>
-              <input
-                id="equation-input"
-                type="text"
-                value={equation}
-                onChange={handleEquationChange}
-                onBlur={handleBlur}
-                placeholder="A'B'..."
-                className={`w-full bg-transparent border-none focus:outline-none text-xl lg:text-2xl font-sans font-black placeholder-slate-300 uppercase tracking-tight ${errorMsg ? "text-red-800" : "text-slate-800"}`}
-                autoComplete="off"
-              />
+                <FiPlay className="text-xl" />
+              </button>
             </div>
           </div>
 
@@ -287,7 +305,7 @@ export default function LogicLens() {
       {/* RIGHT PANEL (Canvas) */}
       <div className="order-first lg:order-last w-full lg:flex-1 h-[40vh] lg:h-full relative bg-slate-50 shrink-0 min-h-[300px] touch-none">
         <StaggeredDropDown
-          equation={equation}
+          equation={activeEquation} // Pass active equation to export
           numInputs={numInputs}
           tableOutputs={tableOutputs}
         />
