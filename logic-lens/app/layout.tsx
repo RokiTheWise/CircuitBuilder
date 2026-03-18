@@ -61,6 +61,9 @@ export const metadata: Metadata = {
   creator: "Dexter Jethro Enriquez",
   publisher: "Dexter Jethro Enriquez",
   robots: "index, follow",
+  alternates: {
+    canonical: "https://logisketch.djenriquez.dev/",
+  },
 
   openGraph: {
     type: "website",
@@ -94,8 +97,43 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "LogiSketch",
+    description:
+      "An interactive boolean logic visualizer and circuit generator. Convert equations to truth tables and logic diagrams instantly.",
+    url: "https://logisketch.djenriquez.dev/",
+    applicationCategory: "EducationApplication, DesignApplication",
+    operatingSystem: "Any",
+    author: {
+      "@type": "Person",
+      name: "Dexter Jethro Enriquez",
+      url: "https://djenriquez.dev",
+    },
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    featureList: [
+      "Boolean Equation to Circuit Generation",
+      "Truth Table Generation",
+      "Quine-McCluskey Logic Simplification",
+      "NAND/NOR Universal Logic Implementation",
+      "Professional Schematic Routing",
+      "Exportable Reports",
+    ],
+  };
+
   return (
     <html lang="en" className="scroll-smooth">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50`}
       >

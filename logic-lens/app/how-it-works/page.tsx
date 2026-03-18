@@ -1,3 +1,4 @@
+import { Metadata } from "next";
 import Link from "next/link";
 import {
   FiArrowLeft,
@@ -7,6 +8,15 @@ import {
   FiLayout,
   FiCompass, // Added for the Routing Section
 } from "react-icons/fi";
+
+export const metadata: Metadata = {
+  title: "How It Works",
+  description:
+    "Explore the engineering behind LogiSketch. Learn about Recursive Descent Parsing, Quine-McCluskey Boolean Reduction, and Universal Logic Synthesis.",
+  alternates: {
+    canonical: "https://logisketch.djenriquez.dev/how-it-works",
+  },
+};
 
 export default function HowItWorks() {
   return (

@@ -393,6 +393,47 @@ export default function LogicLens() {
           />
         </ReactFlow>
       </div>
+
+      {/* SEO-focused Semantic Content (Visually Hidden) */}
+      <section className="sr-only">
+        <h2>LogiSketch: The Professional Logic Circuit Simulator</h2>
+        <p>
+          LogiSketch is a comprehensive digital logic tool designed for students
+          and engineers to visualize boolean algebra and design complex circuits
+          instantly. Our boolean expression to circuit generator simplifies the
+          process of converting truth tables to logic diagrams.
+        </p>
+        <ul>
+          <li>
+            <strong>Boolean Equation to Circuit:</strong> Input any boolean
+            expression using variables A-E and watch it transform into a
+            professional schematic.
+          </li>
+          <li>
+            <strong>Truth Table Generator:</strong> Automatically generate truth
+            tables for any logic circuit and toggle outputs to synthesize new
+            equations.
+          </li>
+          <li>
+            <strong>Logic Simplification:</strong> Built-in Quine-McCluskey
+            algorithm (QMC) for instant boolean reduction and optimization.
+          </li>
+          <li>
+            <strong>Universal Logic:</strong> Support for Standard, NAND-only,
+            and NOR-only gate implementations.
+          </li>
+          <li>
+            <strong>Educational Resource:</strong> Perfect for computer science
+            students learning digital electronics, Karnaugh maps, and De
+            Morgan's laws.
+          </li>
+        </ul>
+        <p>
+          Whether you need a truth table to logic diagram solver or an
+          interactive logic gate simulator, LogiSketch provides the most
+          intuitive online experience for digital circuit design.
+        </p>
+      </section>
     </div>
   );
 }
