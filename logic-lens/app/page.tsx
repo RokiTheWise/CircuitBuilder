@@ -92,9 +92,22 @@ export default function LogicLens() {
     setNodes(result.nodes);
     setEdges(result.edges);
 
-    const eq = getSimplifiedEquation(numInputs, tableOutputs);
-    setActiveEquation(eq);
-    setDraftEquation(eq);
+    const simplified = getSimplifiedEquation(numInputs, tableOutputs);
+    setActiveEquation(simplified);
+
+    // Only overwrite draft if it's NOT equivalent to the current table
+    // (This allows "AB + A" to stay as is instead of being forced to "A")
+    const currentDraftTable = parseEquationToTable(draftEquation, numInputs);
+    const isDraftEquivalent =
+      currentDraftTable &&
+      Object.keys(tableOutputs).every(
+        (key) => currentDraftTable[Number(key)] === tableOutputs[Number(key)],
+      );
+
+    if (!isDraftEquivalent) {
+      setDraftEquation(simplified);
+    }
+
     setErrorMsg(null);
   }, [numInputs, tableOutputs, gateMode, displayStyle]);
 
@@ -131,7 +144,9 @@ export default function LogicLens() {
     const newTable = parseEquationToTable(val, requiredInputs);
     if (newTable) {
       setTableOutputs(newTable);
-      setActiveEquation(val);
+      // We don't setActiveEquation(val) here because the useEffect will handle 
+      // setting activeEquation to the simplified version, and it will keep 
+      // draftEquation as val since it's now equivalent.
       setErrorMsg(null);
     } else if (val.trim() !== "") {
       setErrorMsg("Invalid syntax. Check parentheses or operators.");
@@ -303,6 +318,28 @@ export default function LogicLens() {
                 <FiPlay className="text-xl" />
               </button>
             </div>
+
+            {/* Simplified Equation Display */}
+            {activeEquation &&
+              activeEquation.replace(/\s+/g, "") !==
+                draftEquation.toUpperCase().replace(/\s+/g, "") && (
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      Simplified Result
+                    </span>
+                    <span className="text-sm font-black text-blue-600 tracking-tight">
+                      Q = {activeEquation}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setDraftEquation(activeEquation)}
+                    className="text-[9px] font-bold bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-500 px-2 py-1 rounded transition-colors uppercase tracking-tighter"
+                  >
+                    Use this
+                  </button>
+                </div>
+              )}
           </div>
 
           <TruthTable
