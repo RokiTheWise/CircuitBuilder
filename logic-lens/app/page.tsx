@@ -4,53 +4,50 @@ import Image from "next/image";
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Panel,
   useReactFlow,
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { FiPlay, FiMaximize, FiLock, FiUnlock } from "react-icons/fi";
+import {
+  FiPlay,
+  FiMaximize,
+  FiMinus,
+  FiPlus,
+  FiDownload,
+  FiGithub,
+  FiInfo,
+  FiGrid,
+} from "react-icons/fi";
+import { toPng, toJpeg } from "html-to-image";
 
-// 1. IMPORT BOTH GENERATORS
 import { generateCircuit } from "@/utils/CircuitGenerator";
 import { generateSchematic } from "@/utils/SchematicGenerator";
-
 import { getSimplifiedEquation } from "@/utils/BooleanSimplifier";
 import { parseEquationToTable } from "@/utils/EquationParser";
 import TruthTable from "@/components/truthtable";
-import Counter from "@/components/counter";
-import StaggeredDropDown from "@/components/StaggeredDropdown";
-
-// 2. IMPORT CUSTOM NODES & EDGES
 import SchematicNode from "@/components/SchematicNode";
 import SmartStepEdge from "@/components/SmartStepEdge";
 
 export type GateMode = "STANDARD" | "NAND" | "NOR";
 export type DisplayStyle = "BLOCK" | "SCHEMATIC";
 
-// --- CUSTOM PILL CONTROLS PANEL ---
-function ModernControls({
-  isInteractive,
-  setIsInteractive,
-}: {
-  isInteractive: boolean;
-  setIsInteractive: (val: boolean) => void;
-}) {
+function ModernControls() {
   const { fitView } = useReactFlow();
 
   return (
     <Panel
       position="bottom-right"
-      className="bg-white/80 backdrop-blur-md border border-slate-200 shadow-xl rounded-full flex items-center p-1 mb-4 mr-4 lg:mb-8 lg:mr-8 z-50"
+      className="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 shadow-xl rounded-full flex items-center p-1 mb-4 mr-4 lg:mb-8 lg:mr-8 z-50"
     >
-      {/* Fit View (Center) */}
       <button
         onClick={() => fitView({ duration: 500, padding: 0.2 })}
-        className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-slate-100/80 rounded-full transition-all"
-        title="Center Focus"
+        className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-full transition-all"
+        title="Fit to View"
       >
-        <FiMaximize className="text-lg" />
+        <FiMaximize className="text-base" />
       </button>
     </Panel>
   );
@@ -61,42 +58,31 @@ export default function LogicLens() {
   const [tableOutputs, setTableOutputs] = useState<Record<number, number>>({});
   const [gateMode, setGateMode] = useState<GateMode>("STANDARD");
   const [displayStyle, setDisplayStyle] = useState<DisplayStyle>("SCHEMATIC");
-
-  // INTERACTIVITY STATE
-  const [isInteractive, setIsInteractive] = useState(true);
-
-  // STATE LOGIC
+  const [isInteractive] = useState(true);
   const [draftEquation, setDraftEquation] = useState<string>("");
   const [activeEquation, setActiveEquation] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // 3. REGISTER NODE TYPES
   const nodeTypes = useMemo(() => ({ schematic: SchematicNode }), []);
-
-  // 4. REGISTER EDGE TYPES
   const edgeTypes = useMemo(() => ({ smart: SmartStepEdge }), []);
 
-  // 5. MAIN EFFECT LOOP
   useEffect(() => {
     let result;
-
     if (displayStyle === "SCHEMATIC") {
       result = generateSchematic(numInputs, tableOutputs, gateMode);
     } else {
       result = generateCircuit(numInputs, tableOutputs, gateMode);
     }
-
     setNodes(result.nodes);
     setEdges(result.edges);
 
     const simplified = getSimplifiedEquation(numInputs, tableOutputs);
     setActiveEquation(simplified);
 
-    // Only overwrite draft if it's NOT equivalent to the current table
-    // (This allows "AB + A" to stay as is instead of being forced to "A")
     const currentDraftTable = parseEquationToTable(draftEquation, numInputs);
     const isDraftEquivalent =
       currentDraftTable &&
@@ -111,10 +97,8 @@ export default function LogicLens() {
     setErrorMsg(null);
   }, [numInputs, tableOutputs, gateMode, displayStyle]);
 
-  // --- HANDLERS ---
   const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setDraftEquation(val);
+    setDraftEquation(e.target.value);
     setErrorMsg(null);
   };
 
@@ -123,9 +107,7 @@ export default function LogicLens() {
 
     const invalidChars = val.match(/[^A-E0-1\+\'\(\)\s\u2018\u2019`]/g);
     if (invalidChars) {
-      setErrorMsg(
-        `Invalid character: "${invalidChars[0]}". Only A-E, 0, 1 allowed.`,
-      );
+      setErrorMsg(`Invalid: "${invalidChars[0]}"`);
       return;
     }
 
@@ -137,36 +119,141 @@ export default function LogicLens() {
     });
     requiredInputs = Math.min(5, requiredInputs);
 
-    if (requiredInputs > numInputs) {
-      setNumInputs(requiredInputs);
-    }
+    if (requiredInputs > numInputs) setNumInputs(requiredInputs);
 
     const newTable = parseEquationToTable(val, requiredInputs);
     if (newTable) {
       setTableOutputs(newTable);
-      // We don't setActiveEquation(val) here because the useEffect will handle 
-      // setting activeEquation to the simplified version, and it will keep 
-      // draftEquation as val since it's now equivalent.
       setErrorMsg(null);
     } else if (val.trim() !== "") {
-      setErrorMsg("Invalid syntax. Check parentheses or operators.");
+      setErrorMsg("Invalid syntax");
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      handleGenerate();
+    if (e.key === "Enter") handleGenerate();
+  };
+
+  const handleDownload = async () => {
+    setIsGenerating(true);
+    try {
+      const circuitElement = document.querySelector(
+        ".react-flow__renderer",
+      ) as HTMLElement;
+      if (!circuitElement) return;
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const circuitImgData = await toJpeg(circuitElement, {
+        quality: 0.9,
+        backgroundColor: "#ffffff",
+        width: circuitElement.offsetWidth,
+        height: circuitElement.offsetHeight,
+        pixelRatio: 1,
+        cacheBust: true,
+      });
+
+      const reportContainer = document.createElement("div");
+      reportContainer.style.cssText =
+        "position:fixed;top:0;left:0;z-index:-100;width:800px;padding:40px;background:#ffffff;font-family:sans-serif;color:#0f172a;";
+
+      let tableRows = "";
+      const maxRows = Math.pow(2, numInputs);
+      const headers = Array.from({ length: numInputs }, (_, i) =>
+        String.fromCharCode(65 + i),
+      ).join("</th><th>");
+
+      for (let i = 0; i < maxRows; i++) {
+        const binary = i.toString(2).padStart(numInputs, "0");
+        const cols = binary
+          .split("")
+          .map((bit) => `<td style="padding:4px;">${bit}</td>`)
+          .join("");
+        const out = tableOutputs[i] === 1 ? 1 : 0;
+        const color =
+          out === 1 ? "color:#2563eb;font-weight:bold;" : "color:#94a3b8;";
+        tableRows += `<tr style="border-bottom:1px solid #e2e8f0;text-align:center;height:30px;">${cols}<td style="${color}padding:4px;">${out}</td></tr>`;
+      }
+
+      reportContainer.innerHTML = `
+        <div style="display:flex;align-items:center;gap:15px;margin-bottom:30px;border-bottom:2px solid #e2e8f0;padding-bottom:20px;">
+          <h1 style="margin:0;font-size:32px;font-weight:900;">Logi<span style="color:#2563eb">Sketch</span> Report</h1>
+        </div>
+        <div style="margin-bottom:30px;">
+          <h3 style="font-size:14px;text-transform:uppercase;color:#64748b;font-weight:bold;margin-bottom:5px;">Boolean Equation</h3>
+          <div style="font-size:36px;font-weight:900;color:#0f172a;">Q = ${activeEquation || "?"}</div>
+        </div>
+        <div style="display:flex;gap:40px;align-items:flex-start;">
+          <div style="flex:0 0 200px;">
+            <h3 style="font-size:14px;text-transform:uppercase;color:#64748b;font-weight:bold;margin-bottom:10px;">Truth Table</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <thead><tr style="background:#f1f5f9;height:35px;"><th>${headers}</th><th style="color:#2563eb;">OUT</th></tr></thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+          </div>
+          <div style="flex:1;">
+            <h3 style="font-size:14px;text-transform:uppercase;color:#64748b;font-weight:bold;margin-bottom:10px;">Logic Circuit</h3>
+            <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgb(0 0 0/0.1);">
+              <img src="${circuitImgData}" style="width:100%;display:block;" />
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:40px;text-align:right;font-size:12px;color:#94a3b8;">Generated with LogiSketch</div>
+      `;
+
+      document.body.appendChild(reportContainer);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const finalReportUrl = await toPng(reportContainer, {
+        cacheBust: true,
+        pixelRatio: 1.5,
+      });
+
+      document.body.removeChild(reportContainer);
+
+      const a = document.createElement("a");
+      a.setAttribute("download", "logisketch-report.png");
+      a.setAttribute("href", finalReportUrl);
+      a.click();
+    } catch (err) {
+      console.error("Report generation failed:", err);
+      alert("Generation failed. Please try again.");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
+  const showSimplified =
+    activeEquation &&
+    activeEquation.replace(/\s+/g, "") !==
+      draftEquation.toUpperCase().replace(/\s+/g, "");
+
+  const gateModes = [
+    {
+      mode: "STANDARD" as GateMode,
+      label: "Standard",
+      activeClass: "bg-blue-600 shadow-blue-900/40 text-white",
+    },
+    {
+      mode: "NAND" as GateMode,
+      label: "NAND",
+      activeClass: "bg-purple-600 shadow-purple-900/40 text-white",
+    },
+    {
+      mode: "NOR" as GateMode,
+      label: "NOR",
+      activeClass: "bg-orange-500 shadow-orange-900/40 text-white",
+    },
+  ];
+
   return (
-    <div className="h-[100dvh] w-screen bg-slate-50 text-slate-900 flex flex-col lg:flex-row overflow-hidden font-sans">
+    <div className="h-[100dvh] w-screen flex flex-col lg:flex-row overflow-hidden font-sans">
       {/* SIDEBAR */}
-      <div className="order-last lg:order-first w-full lg:w-[400px] flex-1 lg:flex-none border-t lg:border-t-0 lg:border-r border-slate-200 bg-white h-full overflow-y-auto shadow-xl z-10">
-        <div className="p-4 lg:p-6 flex flex-col gap-6 min-h-full">
-          {/* LOGO */}
-          <div className="flex items-center gap-4 mb-2">
-            <div className="relative w-10 h-10 lg:w-12 lg:h-12 shrink-0 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+      <div className="order-last lg:order-first w-full lg:w-[400px] flex-none bg-slate-900 border-t lg:border-t-0 lg:border-r border-slate-800 h-full z-10 flex flex-col">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-slate-700 shrink-0">
               <Image
                 src="/LogiSketch.png"
                 alt="LogiSketch Logo"
@@ -175,128 +262,176 @@ export default function LogicLens() {
               />
             </div>
             <div>
-              <h1 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight leading-none">
-                Logi<span className="text-blue-600">Sketch</span>
+              <h1 className="text-lg font-black text-white tracking-tight leading-none">
+                Logi<span className="text-blue-400">Sketch</span>
               </h1>
-              <p className="text-slate-500 text-[10px] mt-1 font-bold uppercase tracking-wider">
-                Visualize boolean logic
+              <p className="text-slate-500 text-[9px] mt-0.5 font-semibold uppercase tracking-widest">
+                Boolean Logic Visualizer
               </p>
             </div>
           </div>
 
-          {/* MODE SELECTOR */}
-          <div className="bg-slate-100 p-3 lg:p-4 rounded-lg border border-slate-200">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
-              Implementation Mode
-            </label>
-            <div className="flex gap-2">
-              <DrawOutlineButton
-                isActive={gateMode === "STANDARD"}
-                onClick={() => setGateMode("STANDARD")}
-                lineColor="bg-blue-500"
-                textColor="text-blue-600"
-              >
-                Standard
-              </DrawOutlineButton>
-              <DrawOutlineButton
-                isActive={gateMode === "NAND"}
-                onClick={() => setGateMode("NAND")}
-                lineColor="bg-purple-500"
-                textColor="text-purple-600"
-              >
-                NAND
-              </DrawOutlineButton>
-              <DrawOutlineButton
-                isActive={gateMode === "NOR"}
-                onClick={() => setGateMode("NOR")}
-                lineColor="bg-orange-500"
-                textColor="text-orange-600"
-              >
-                NOR
-              </DrawOutlineButton>
+          {/* Action icon buttons */}
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={handleDownload}
+              disabled={isGenerating}
+              title={isGenerating ? "Generating…" : "Download Report"}
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <FiDownload className="text-sm" />
+            </button>
+            <button
+              onClick={() =>
+                window.open(
+                  "https://github.com/RokiTheWise/CircuitBuilder",
+                  "_blank",
+                )
+              }
+              title="View Source"
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <FiGithub className="text-sm" />
+            </button>
+            <button
+              onClick={() =>
+                window.open("https://djenriquez.dev/", "_blank")
+              }
+              title="View Portfolio"
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <FiGrid className="text-sm" />
+            </button>
+            <button
+              onClick={() => (window.location.href = "/how-it-works")}
+              title="How It Works"
+              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              <FiInfo className="text-sm" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable controls */}
+        <div className="flex-1 overflow-y-auto sidebar-scroll px-5 py-5 flex flex-col gap-5">
+          {/* Gate Mode */}
+          <div>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5">
+              Gate Mode
+            </p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {gateModes.map(({ mode, label, activeClass }) => (
+                <button
+                  key={mode}
+                  onClick={() => setGateMode(mode)}
+                  className={`py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+                    gateMode === mode
+                      ? `${activeClass} shadow-lg`
+                      : "bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700/80"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* DISPLAY STYLE SELECTOR */}
-          <div className="bg-slate-100 p-3 lg:p-4 rounded-lg border border-slate-200">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
-              Display Style
-            </label>
-            <div className="flex bg-slate-200 rounded-lg p-1 relative">
-              <div
-                className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-md shadow-sm transition-all duration-300 ${displayStyle === "BLOCK" ? "left-1" : "left-[calc(50%+0px)]"}`}
-              />
-              <button
-                onClick={() => setDisplayStyle("BLOCK")}
-                className={`flex-1 relative z-10 text-xs font-bold py-2 rounded-md transition-colors ${displayStyle === "BLOCK" ? "text-slate-800" : "text-slate-500"}`}
-              >
-                Blocks
-              </button>
-              <button
-                onClick={() => setDisplayStyle("SCHEMATIC")}
-                className={`flex-1 relative z-10 text-xs font-bold py-2 rounded-md transition-colors ${displayStyle === "SCHEMATIC" ? "text-slate-800" : "text-slate-500"}`}
-              >
-                Schematic
-              </button>
-            </div>
-          </div>
-
-          {/* INPUTS CONTROL */}
-          <div className="flex items-center justify-between bg-slate-100 p-3 rounded-lg border border-slate-200">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-slate-600">
-                Inputs:
-              </span>
-              <div className="bg-white px-3 py-1 rounded border border-slate-200 shadow-sm">
-                <Counter
-                  value={numInputs}
-                  places={[1]}
-                  className="text-slate-700 font-bold"
+          {/* Display Style + Inputs row */}
+          <div className="flex gap-3">
+            {/* Display Style */}
+            <div className="flex-1">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5">
+                Display
+              </p>
+              <div className="bg-slate-800 rounded-xl p-1 flex relative h-[42px]">
+                <div
+                  className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-slate-600 rounded-lg transition-all duration-300 ${
+                    displayStyle === "BLOCK" ? "left-1" : "left-[calc(50%+0px)]"
+                  }`}
                 />
+                <button
+                  onClick={() => setDisplayStyle("BLOCK")}
+                  className={`flex-1 relative z-10 text-[11px] font-bold rounded-lg transition-colors ${
+                    displayStyle === "BLOCK"
+                      ? "text-white"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  Blocks
+                </button>
+                <button
+                  onClick={() => setDisplayStyle("SCHEMATIC")}
+                  className={`flex-1 relative z-10 text-[11px] font-bold rounded-lg transition-colors ${
+                    displayStyle === "SCHEMATIC"
+                      ? "text-white"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  Schematic
+                </button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setNumInputs(Math.max(1, numInputs - 1))}
-                disabled={numInputs <= 1}
-                className={`px-3 py-1 rounded shadow-sm text-xs font-bold transition-colors border ${numInputs <= 1 ? "bg-slate-200 text-slate-400 border-transparent cursor-not-allowed" : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"}`}
-              >
-                -
-              </button>
-              <button
-                onClick={() => setNumInputs(Math.min(5, numInputs + 1))}
-                disabled={numInputs >= 5}
-                className={`px-3 py-1 rounded shadow-sm text-xs font-bold transition-colors ${numInputs >= 5 ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200"}`}
-              >
-                +
-              </button>
+
+            {/* Inputs */}
+            <div className="w-[120px]">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5">
+                Inputs
+              </p>
+              <div className="bg-slate-800 rounded-xl px-2 flex items-center justify-between h-[42px]">
+                <button
+                  onClick={() => setNumInputs(Math.max(1, numInputs - 1))}
+                  disabled={numInputs <= 1}
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-all ${
+                    numInputs <= 1
+                      ? "text-slate-700 cursor-not-allowed"
+                      : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                  }`}
+                >
+                  <FiMinus />
+                </button>
+                <span className="text-white font-black text-xl tabular-nums w-5 text-center">
+                  {numInputs}
+                </span>
+                <button
+                  onClick={() => setNumInputs(Math.min(5, numInputs + 1))}
+                  disabled={numInputs >= 5}
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm transition-all ${
+                    numInputs >= 5
+                      ? "text-slate-700 cursor-not-allowed"
+                      : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                  }`}
+                >
+                  <FiPlus />
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* EQUATION INPUT WITH GENERATE BUTTON */}
-          <div
-            className={`border rounded-xl p-4 transition-all focus-within:ring-2 shadow-sm ${errorMsg ? "bg-red-50 border-red-200 focus-within:ring-red-300" : "bg-white border-blue-200 focus-within:ring-blue-400"}`}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <label
-                htmlFor="equation-input"
-                className={`text-[10px] font-bold uppercase tracking-wider block ${errorMsg ? "text-red-500" : "text-blue-600"}`}
-              >
-                Boolean Equation
-              </label>
+          {/* Equation Input */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                Equation
+              </p>
               {errorMsg && (
-                <span className="text-[9px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">
+                <span className="text-[9px] font-bold text-red-400 bg-red-900/30 border border-red-800/50 px-2 py-0.5 rounded-full animate-pulse">
                   {errorMsg}
                 </span>
               )}
             </div>
 
-            <div className="flex items-stretch gap-2">
-              <div className="flex items-center bg-slate-50 rounded-lg px-3 border border-slate-200 flex-1 focus-within:border-blue-400 transition-colors">
+            <div
+              className={`rounded-xl border transition-all ${
+                errorMsg
+                  ? "border-red-700/60 bg-red-950/20"
+                  : "border-slate-700 bg-slate-800 focus-within:border-blue-500/60"
+              }`}
+            >
+              <div className="flex items-center gap-2 px-4 pt-3 pb-2">
                 <span
-                  className={`text-xl font-black select-none mr-2 ${errorMsg ? "text-red-400" : "text-blue-600"}`}
+                  className={`text-2xl font-black select-none shrink-0 ${errorMsg ? "text-red-500" : "text-blue-400"}`}
                 >
-                  Q=
+                  Q =
                 </span>
                 <input
                   id="equation-input"
@@ -304,66 +439,78 @@ export default function LogicLens() {
                   value={draftEquation}
                   onChange={handleDraftChange}
                   onKeyDown={handleKeyDown}
-                  placeholder="e.g. AB + C'"
-                  className={`w-full bg-transparent border-none focus:outline-none text-xl lg:text-2xl font-sans font-black placeholder-slate-300 uppercase tracking-tight py-2 ${errorMsg ? "text-red-800" : "text-slate-800"}`}
+                  placeholder="AB + C'"
+                  className={`w-full bg-transparent border-none focus:outline-none text-2xl font-black font-mono placeholder-slate-700 uppercase tracking-tight ${
+                    errorMsg ? "text-red-300" : "text-slate-100"
+                  }`}
                   autoComplete="off"
+                  spellCheck={false}
                 />
               </div>
 
-              <button
-                onClick={handleGenerate}
-                className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-lg font-bold shadow-md shadow-blue-200 transition-all active:scale-95"
-                title="Generate Circuit"
-              >
-                <FiPlay className="text-xl" />
-              </button>
-            </div>
-
-            {/* Simplified Equation Display */}
-            {activeEquation &&
-              activeEquation.replace(/\s+/g, "") !==
-                draftEquation.toUpperCase().replace(/\s+/g, "") && (
-                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                      Simplified Result
+              <div className="flex items-center justify-between px-4 pb-3 gap-3">
+                <div className="flex-1 min-w-0">
+                  {showSimplified ? (
+                    <button
+                      onClick={() => setDraftEquation(activeEquation)}
+                      className="flex items-center gap-1.5 group"
+                    >
+                      <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest shrink-0">
+                        Simplified →
+                      </span>
+                      <span className="text-xs font-black text-blue-400 group-hover:text-blue-300 transition-colors font-mono truncate">
+                        {activeEquation}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-slate-700">
+                      ↵ Enter to run
                     </span>
-                    <span className="text-sm font-black text-blue-600 tracking-tight">
-                      Q = {activeEquation}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setDraftEquation(activeEquation)}
-                    className="text-[9px] font-bold bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-500 px-2 py-1 rounded transition-colors uppercase tracking-tighter"
-                  >
-                    Use this
-                  </button>
+                  )}
                 </div>
-              )}
+                <button
+                  onClick={handleGenerate}
+                  className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-lg shadow-blue-900/50 transition-all active:scale-95 shrink-0"
+                >
+                  <FiPlay className="text-xs" />
+                  <span>Run</span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          <TruthTable
-            numInputs={numInputs}
-            outputs={tableOutputs}
-            setOutputs={setTableOutputs}
-          />
-
-          <div className="mt-auto pt-6 border-t border-slate-100 text-center pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Made by Dexter Jethro Enriquez
+          {/* Truth Table */}
+          <div>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2.5">
+              Truth Table
             </p>
+            <TruthTable
+              dark
+              numInputs={numInputs}
+              outputs={tableOutputs}
+              setOutputs={setTableOutputs}
+            />
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 px-5 py-3 border-t border-slate-800">
+          <p className="text-[10px] font-semibold text-slate-600 text-center">
+            Made by{" "}
+            <a
+              href="https://djenriquez.dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-500 hover:text-slate-400 transition-colors"
+            >
+              Dexter Jethro Enriquez
+            </a>
+          </p>
         </div>
       </div>
 
-      {/* RIGHT PANEL (Canvas) */}
+      {/* CANVAS */}
       <div className="order-first lg:order-last w-full lg:flex-1 h-[40vh] lg:h-full relative bg-slate-50 shrink-0 min-h-[300px] touch-none">
-        <StaggeredDropDown
-          equation={activeEquation}
-          numInputs={numInputs}
-          tableOutputs={tableOutputs}
-        />
-
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -384,13 +531,8 @@ export default function LogicLens() {
           nodesDraggable={isInteractive}
           elementsSelectable={isInteractive}
         >
-          <Background color="#cbd5e1" gap={25} size={1} />
-
-          {/* Inject Modern Pill Controls */}
-          <ModernControls
-            isInteractive={isInteractive}
-            setIsInteractive={setIsInteractive}
-          />
+          <Background variant={BackgroundVariant.Dots} color="#d1d5db" gap={20} size={1.5} />
+          <ModernControls />
         </ReactFlow>
       </div>
 
@@ -425,7 +567,7 @@ export default function LogicLens() {
           <li>
             <strong>Educational Resource:</strong> Perfect for computer science
             students learning digital electronics, Karnaugh maps, and De
-            Morgan's laws.
+            Morgan&apos;s laws.
           </li>
         </ul>
         <p>
@@ -437,40 +579,3 @@ export default function LogicLens() {
     </div>
   );
 }
-
-// ... DrawOutlineButton logic ...
-interface DrawOutlineButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  children: React.ReactNode;
-  isActive: boolean;
-  lineColor: string;
-  textColor: string;
-}
-
-const DrawOutlineButton = ({
-  children,
-  isActive,
-  lineColor,
-  textColor,
-  ...rest
-}: DrawOutlineButtonProps) => {
-  return (
-    <button
-      {...rest}
-      className={`group relative flex-1 px-4 py-2 text-xs font-bold transition-colors duration-[400ms] ${isActive ? `bg-white ${textColor} shadow-sm` : "text-slate-500 hover:text-slate-700 bg-transparent"}`}
-    >
-      <span className="relative z-10">{children}</span>
-      <span
-        className={`absolute left-0 top-0 h-[2px] ${lineColor} transition-all duration-100 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`}
-      />
-      <span
-        className={`absolute right-0 top-0 w-[2px] ${lineColor} transition-all delay-100 duration-100 ${isActive ? "h-full" : "h-0 group-hover:h-full"}`}
-      />
-      <span
-        className={`absolute bottom-0 right-0 h-[2px] ${lineColor} transition-all delay-200 duration-100 ${isActive ? "w-full" : "w-0 group-hover:w-full"}`}
-      />
-      <span
-        className={`absolute bottom-0 left-0 w-[2px] ${lineColor} transition-all delay-300 duration-100 ${isActive ? "h-full" : "h-0 group-hover:h-full"}`}
-      />
-    </button>
-  );
-};
