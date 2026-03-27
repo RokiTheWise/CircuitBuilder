@@ -144,8 +144,8 @@ export default function LogicLens() {
     const newTable = parseEquationToTable(val, requiredInputs);
     if (newTable) {
       setTableOutputs(newTable);
-      // We don't setActiveEquation(val) here because the useEffect will handle 
-      // setting activeEquation to the simplified version, and it will keep 
+      // We don't setActiveEquation(val) here because the useEffect will handle
+      // setting activeEquation to the simplified version, and it will keep
       // draftEquation as val since it's now equivalent.
       setErrorMsg(null);
     } else if (val.trim() !== "") {
@@ -166,7 +166,7 @@ export default function LogicLens() {
         <div className="p-4 lg:p-6 flex flex-col gap-6 min-h-full">
           {/* LOGO */}
           <div className="flex items-center gap-4 mb-2">
-            <div className="relative w-10 h-10 lg:w-12 lg:h-12 shrink-0 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+            <div className="relative w-10 h-10 lg:w-12 lg:h-12 shrink-0 rounded-xl overflow-hidden">
               <Image
                 src="/LogiSketch.png"
                 alt="LogiSketch Logo"
