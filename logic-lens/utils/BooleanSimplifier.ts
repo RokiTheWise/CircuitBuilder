@@ -156,3 +156,185 @@ export function getSimplifiedEquation(numInputs: number, outputs: Record<number,
 
   return terms.sort((a, b) => a.length - b.length || a.localeCompare(b)).join(" + ");
 }
+
+// 3. THE TRACER (Returns a step-by-step walkthrough of the QMC reduction)
+//
+// This mirrors the algorithm in getPrimeImplicants but records each stage so the
+// UI can explain *how* the simplified equation was derived. It deliberately does
+// NOT reuse getPrimeImplicants internals: that solver has bug-fix history and is
+// left untouched. A little duplication here is cheaper than risking the proven path.
+
+const patternToTerm = (pattern: string): string => {
+  let part = "";
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === '1') part += getVar(i);
+    if (pattern[i] === '0') part += getVar(i) + "'";
+  }
+  return part || "1";
+};
+
+export interface StepMinterm {
+  decimal: number;
+  binary: string;
+  term: string;
+}
+
+export interface StepMerge {
+  left: string;
+  right: string;
+  combined: string;
+}
+
+export interface StepRound {
+  // 0-based index of this combining pass
+  index: number;
+  merges: StepMerge[];
+  // Patterns that survived this round without merging (they become prime implicants)
+  carriedPrime: string[];
+}
+
+export interface StepPrimeImplicant {
+  binary: string;
+  term: string;
+}
+
+export interface StepEssential {
+  pi: StepPrimeImplicant;
+  // The minterm (binary) that is covered by ONLY this prime implicant
+  forcedBy: string;
+}
+
+export interface SimplificationSteps {
+  numInputs: number;
+  // For trivial cases (constant 0 or 1) we skip the algorithm and explain directly.
+  trivial?: { value: "0" | "1"; reason: string };
+  minterms: StepMinterm[];
+  rounds: StepRound[];
+  primeImplicants: StepPrimeImplicant[];
+  essential: StepEssential[];
+  finalEquation: string;
+}
+
+export function getSimplificationSteps(
+  numInputs: number,
+  outputs: Record<number, number>,
+): SimplificationSteps {
+  const maxRows = Math.pow(2, numInputs);
+  const mintermDecimals = Object.keys(outputs)
+    .map(Number)
+    .filter(i => i < maxRows && outputs[i] === 1)
+    .sort((a, b) => a - b);
+
+  const base: SimplificationSteps = {
+    numInputs,
+    minterms: [],
+    rounds: [],
+    primeImplicants: [],
+    essential: [],
+    finalEquation: getSimplifiedEquation(numInputs, outputs),
+  };
+
+  // --- Trivial cases ---
+  if (mintermDecimals.length === 0) {
+    return {
+      ...base,
+      trivial: {
+        value: "0",
+        reason:
+          "No input combination produces a 1, so the output is always 0. There is nothing to combine.",
+      },
+    };
+  }
+  if (mintermDecimals.length === maxRows) {
+    return {
+      ...base,
+      trivial: {
+        value: "1",
+        reason:
+          "Every input combination produces a 1, so the output is always 1 regardless of the inputs.",
+      },
+    };
+  }
+
+  const minterms: StepMinterm[] = mintermDecimals.map(d => ({
+    decimal: d,
+    binary: toBin(d, numInputs),
+    term: patternToTerm(toBin(d, numInputs)),
+  }));
+  base.minterms = minterms;
+
+  // --- Combining rounds (record each pass) ---
+  let groups = new Set<string>(minterms.map(m => m.binary));
+  const primeImplicants = new Set<string>();
+  let roundIndex = 0;
+
+  while (groups.size > 0) {
+    const nextGroups = new Set<string>();
+    const used = new Set<string>();
+    const sorted = Array.from(groups).sort();
+    const merges: StepMerge[] = [];
+
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const s1 = sorted[i];
+        const s2 = sorted[j];
+
+        let diffIdx = -1;
+        let diffCount = 0;
+        for (let k = 0; k < numInputs; k++) {
+          if (s1[k] !== s2[k]) {
+            diffIdx = k;
+            diffCount++;
+          }
+        }
+
+        if (diffCount === 1) {
+          const combined = s1.substring(0, diffIdx) + '-' + s1.substring(diffIdx + 1);
+          if (!nextGroups.has(combined)) merges.push({ left: s1, right: s2, combined });
+          nextGroups.add(combined);
+          used.add(s1);
+          used.add(s2);
+        }
+      }
+    }
+
+    const carriedPrime = sorted.filter(s => !used.has(s));
+    carriedPrime.forEach(s => primeImplicants.add(s));
+
+    // Record the round only if anything happened (a merge, or a survivor that
+    // becomes prime). The final empty pass that just breaks the loop is skipped.
+    if (merges.length > 0 || carriedPrime.length > 0) {
+      base.rounds.push({ index: roundIndex, merges, carriedPrime });
+    }
+    roundIndex++;
+
+    if (nextGroups.size === 0) break;
+    groups = nextGroups;
+  }
+
+  const piArray = Array.from(primeImplicants);
+  base.primeImplicants = piArray.map(p => ({ binary: p, term: patternToTerm(p) }));
+
+  // --- Essential prime implicants (minterm covered by exactly one PI) ---
+  const covers = (pi: string, m: string) => {
+    for (let i = 0; i < pi.length; i++) {
+      if (pi[i] !== '-' && pi[i] !== m[i]) return false;
+    }
+    return true;
+  };
+
+  const mintermBins = minterms.map(m => m.binary);
+  const seenEssential = new Set<string>();
+  mintermBins.forEach(m => {
+    const coveringPIs = piArray.filter(pi => covers(pi, m));
+    if (coveringPIs.length === 1 && !seenEssential.has(coveringPIs[0])) {
+      seenEssential.add(coveringPIs[0]);
+      base.essential.push({
+        pi: { binary: coveringPIs[0], term: patternToTerm(coveringPIs[0]) },
+        forcedBy: m,
+      });
+    }
+  });
+
+  return base;
+}
