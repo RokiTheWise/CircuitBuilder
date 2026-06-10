@@ -16,11 +16,15 @@ import { FiPlay, FiMaximize, FiLock, FiUnlock } from "react-icons/fi";
 import { generateCircuit } from "@/utils/CircuitGenerator";
 import { generateSchematic } from "@/utils/SchematicGenerator";
 
-import { getSimplifiedEquation } from "@/utils/BooleanSimplifier";
+import {
+  getSimplifiedEquation,
+  getSimplificationSteps,
+} from "@/utils/BooleanSimplifier";
 import { parseEquationToTable } from "@/utils/EquationParser";
 import TruthTable from "@/components/truthtable";
 import Counter from "@/components/counter";
 import StaggeredDropDown from "@/components/StaggeredDropdown";
+import SimplificationModal from "@/components/SimplificationModal";
 
 // 2. IMPORT CUSTOM NODES & EDGES
 import SchematicNode from "@/components/SchematicNode";
@@ -64,6 +68,13 @@ export default function LogicLens() {
 
   // INTERACTIVITY STATE
   const [isInteractive, setIsInteractive] = useState(true);
+
+  // WALKTHROUGH MODAL STATE
+  const [showSteps, setShowSteps] = useState(false);
+  const simplificationSteps = useMemo(
+    () => getSimplificationSteps(numInputs, tableOutputs),
+    [numInputs, tableOutputs],
+  );
 
   // STATE LOGIC
   const [draftEquation, setDraftEquation] = useState<string>("");
@@ -332,12 +343,21 @@ export default function LogicLens() {
                       Q = {activeEquation}
                     </span>
                   </div>
-                  <button
-                    onClick={() => setDraftEquation(activeEquation)}
-                    className="text-[9px] font-bold bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-500 px-2 py-1 rounded transition-colors uppercase tracking-tighter"
-                  >
-                    Use this
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setShowSteps(true)}
+                      className="text-[9px] font-bold bg-slate-100 hover:bg-purple-600 hover:text-white text-slate-500 px-2 py-1 rounded transition-colors uppercase tracking-tighter"
+                      title="See the step-by-step simplification"
+                    >
+                      How it was computed
+                    </button>
+                    <button
+                      onClick={() => setDraftEquation(activeEquation)}
+                      className="text-[9px] font-bold bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-500 px-2 py-1 rounded transition-colors uppercase tracking-tighter"
+                    >
+                      Use this
+                    </button>
+                  </div>
                 </div>
               )}
           </div>
@@ -434,6 +454,14 @@ export default function LogicLens() {
           intuitive online experience for digital circuit design.
         </p>
       </section>
+
+      {/* SIMPLIFICATION WALKTHROUGH MODAL */}
+      {showSteps && (
+        <SimplificationModal
+          steps={simplificationSteps}
+          onClose={() => setShowSteps(false)}
+        />
+      )}
     </div>
   );
 }

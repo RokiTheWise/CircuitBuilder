@@ -169,7 +169,7 @@ export default function SimplificationModal({
                       {round.carriedPrime.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                            Can't combine →
+                            Can&apos;t combine →
                           </span>
                           {round.carriedPrime.map((p) => (
                             <PatternChip key={p} pattern={p} tone="blue" />
